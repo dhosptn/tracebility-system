@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Models\Production\ProductionProcess;
+namespace App\Modules\Production\Models\ProductionProcess;
 
-use App\Models\Production\PdMasterData\Setting;
+use App\Modules\Production\Models\PdMasterData\Setting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -56,26 +56,26 @@ class WorkOrder extends Model
     // Relationship to Unit (UOM)
     public function unit()
     {
-        return $this->belongsTo(\App\Models\Unit::class, 'uom_id', 'uom_id');
+        return $this->belongsTo(\App\Modules\Production\Models\Unit::class, 'uom_id', 'uom_id');
     }
 
     // Relationship to Lot
     public function lot()
     {
-        return $this->belongsTo(Lot::class, 'lot_id', 'lot_id');
+        return $this->belongsTo(WoLot::class, 'lot_id', 'lot_id');
     }
 
     // Relationship to Item Master
     public function item()
     {
-        return $this->hasOne(\App\Models\MasterData\Item::class, 'item_number', 'part_no')
+        return $this->hasOne(\App\Modules\Production\Models\MasterData\ItemMaster::class, 'item_number', 'part_no')
             ->where('is_delete', 'N');
     }
 
     // Relationship to BOM
     public function bom()
     {
-        return $this->hasOne(\App\Models\Production\BOM\MBom::class, 'part_no', 'part_no')
+        return $this->hasOne(\App\Modules\Production\Models\PdMasterData\Bom::class, 'part_no', 'part_no')
             ->where('is_delete', 'N');
     }
 
@@ -85,4 +85,22 @@ class WorkOrder extends Model
     //   return $this->hasOne(WorkOrderCompletion::class, 'wo_no', 'wo_no')
     //     ->where('is_delete', 'N');
     // }
+
+    // Relationship to WO Transactions
+    public function woTransactions()
+    {
+        return $this->hasMany(WoTransaction::class, 'wo_id', 'wo_id');
+    }
+
+    // Relationship to Process (Master Process)
+    public function process()
+    {
+        return $this->belongsTo(\App\Modules\Production\Models\PdMasterData\MasterProcess::class, 'process_id', 'process_id');
+    }
+
+    // Relationship to Machine
+    public function machine()
+    {
+        return $this->belongsTo(\App\Modules\Production\Models\PdMasterData\Machine::class, 'machine_id', 'machine_id');
+    }
 }

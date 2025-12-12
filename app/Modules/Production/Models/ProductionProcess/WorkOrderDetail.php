@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models\Production\ProductionProcess;
+namespace App\Modules\Production\Models\ProductionProcess;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

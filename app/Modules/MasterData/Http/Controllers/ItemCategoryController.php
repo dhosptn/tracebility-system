@@ -50,4 +50,37 @@ class ItemCategoryController extends Controller
 
     return response()->json(['success' => true]);
   }
+
+  public function edit($id)
+  {
+    $category = ItemCategory::findOrFail($id);
+    return view('MasterData::itemmaster.itemcategory.edit', compact('category'));
+  }
+
+  public function update(Request $request, $id)
+  {
+    $request->validate([
+      'item_cat_name' => 'required',
+      'item_cat_type' => 'required',
+    ]);
+
+    $category = ItemCategory::findOrFail($id);
+    $category->update([
+      'item_cat_name' => $request->item_cat_name,
+      'item_cat_desc' => $request->item_cat_desc,
+      'transaction_status' => $request->item_cat_type == 'Inventory' ? 1 : 2,
+      'edit_by' => auth()->user()->name ?? 'SYSTEM',
+      'edit_date' => Carbon::now(),
+    ]);
+
+    return redirect()->route('itemcategory.index')->with('success', 'Category updated successfully');
+  }
+
+  public function destroy($id)
+  {
+    $category = ItemCategory::findOrFail($id);
+    $category->update(['is_delete' => 'Y']);
+
+    return response()->json(['success' => true, 'message' => 'Category deleted successfully']);
+  }
 }

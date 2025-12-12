@@ -9,7 +9,7 @@
       <div class="card-header">
         <h3 class="card-title">Settings Process List</h3>
         <div class="card-tools">
-          <a href="{{ route('setting-process.create') }}" class="btn btn-primary btn-sm">
+          <a href="{{ route('production.setting-process.create') }}" class="btn btn-primary btn-sm">
             <i class="fas fa-plus"></i> Add New
           </a>
         </div>
@@ -54,7 +54,7 @@
     var table = $('#routing-table').DataTable({
         processing: true,
         serverSide: true,
-        ajax: "{{ route('setting-process.index') }}",
+        ajax: "{{ route('production.setting-process.index') }}",
         columns: [
             {data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false},
             {data: 'routing_name_link', name: 'routing_name'},

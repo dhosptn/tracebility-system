@@ -28,7 +28,7 @@
           Work Order Transaction List
         </h3>
         <div class="card-tools">
-          <a href="{{ route('wo_transaction.create') }}" class="btn btn-primary btn-sm">
+          <a href="{{ route('production.wo-transaction.create') }}" class="btn btn-primary btn-sm">
             <i class="fas fa-plus"></i> Create New Transaction
           </a>
         </div>
@@ -67,7 +67,7 @@
     var table = $('#wo-transaction-table').DataTable({
       processing: true,
       serverSide: true,
-      ajax: "{{ route('wo_transaction.index') }}",
+      ajax: "{{ route('production.wo-transaction.index') }}",
       columns: [
         { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
         { data: 'wo_no', name: 'wo_no' },

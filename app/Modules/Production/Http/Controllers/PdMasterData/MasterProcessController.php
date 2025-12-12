@@ -24,7 +24,7 @@ class MasterProcessController extends Controller
         ->addColumn('action', function ($row) {
           return '
                         <div class="btn-group">
-                            <a href="' . route('master-process.edit', $row->proces_id) . '" class="btn btn-sm btn-warning" title="Edit">
+                            <a href="' . route('production.master-process.edit', $row->proces_id) . '" class="btn btn-sm btn-warning" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <button type="button" class="btn btn-sm btn-danger btn-delete" data-id="' . $row->proces_id . '" title="Delete">
@@ -67,7 +67,7 @@ class MasterProcessController extends Controller
         'is_delete'    => 'N'
       ]);
 
-      return redirect()->route('master-process.index')
+      return redirect()->route('production.master-process.index')
         ->with('success', 'Process berhasil ditambahkan.');
     } catch (\Exception $e) {
       return back()->with('error', $e->getMessage());
@@ -102,7 +102,7 @@ class MasterProcessController extends Controller
         'edit_date'    => now(),
       ]);
 
-      return redirect()->route('master-process.index')
+      return redirect()->route('production.master-process.index')
         ->with('success', 'Process berhasil diperbarui.');
     } catch (\Exception $e) {
       return back()->with('error', $e->getMessage());

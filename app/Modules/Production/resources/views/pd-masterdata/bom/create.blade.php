@@ -9,13 +9,13 @@
       <div class="card-header">
         <h3 class="card-title">Form Input BOM</h3>
         <div class="card-tools">
-          <a href="{{ route('bom.index') }}" class="btn btn-tool" title="Back to List">
+          <a href="{{ route('production.bom.index') }}" class="btn btn-tool" title="Back to List">
             <i class="fas fa-times"></i>
           </a>
         </div>
       </div>
 
-      <form action="{{ route('bom.store') }}" method="POST">
+      <form action="{{ route('production.bom.store') }}" method="POST">
         @csrf
         <div class="card-body">
           {{-- BOM HEADER --}}
@@ -148,7 +148,7 @@
           </div>
         </div>
         <div class="card-footer text-right">
-          <a href="{{ route('bom.index') }}" class="btn btn-default mr-2">
+          <a href="{{ route('production.bom.index') }}" class="btn btn-default mr-2">
             <i class="fas fa-times"></i> Cancel
           </a>
           <button type="submit" class="btn btn-primary px-4">

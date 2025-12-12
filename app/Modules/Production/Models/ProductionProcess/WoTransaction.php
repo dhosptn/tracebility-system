@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Models\Production\ProductionProcess;
+namespace App\Modules\Production\Models\ProductionProcess;
 
-use App\Models\Production\PdMasterData\MasterProcess;
+use App\Modules\Production\Models\PdMasterData\MasterProcess;
 use Illuminate\Database\Eloquent\Model;
 
 

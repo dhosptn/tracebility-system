@@ -3,248 +3,263 @@
 @section('title', 'Edit BOM')
 
 @section('content')
-<section class="content">
-  <div class="container-fluid">
-    <div class="card card-primary card-outline">
-      <div class="card-header">
-        <h3 class="card-title">Form Edit BOM</h3>
-        <div class="card-tools">
-          <a href="{{ route('bom.index') }}" class="btn btn-tool" title="Back to List">
-            <i class="fas fa-times"></i>
-          </a>
-        </div>
-      </div>
-
-      <form action="{{ route('bom.update', $bom->bom_id) }}" method="POST">
-        @csrf
-        @method('PUT')
-        <div class="card-body">
-          {{-- BOM HEADER --}}
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-group">
-                <label>BOM Name <span class="text-danger">*</span></label>
-                <input type="text" name="bom_name" class="form-control" value="{{ old('bom_name', $bom->bom_name) }}"
-                  placeholder="Masukkan Nama BOM" required>
-              </div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>Part Number</label>
-                <div class="input-group">
-                  <input type="text" id="part_no" name="part_no" class="form-control"
-                    value="{{ old('part_no', $bom->part_no) }}" readonly placeholder="Otomatis terisi">
-                  <div class="input-group-append">
-                    <button type="button" class="btn btn-info" data-toggle="modal" data-target="#productModal">
-                      <i class="fas fa-search"></i> Select
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>Nama Produk</label>
-                <input type="text" id="part_name" name="part_name" class="form-control"
-                  value="{{ old('part_name', $bom->part_name) }}" placeholder="Masukkan nama produk">
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>UOM</label>
-                <input type="text" id="uom" name="uom" class="form-control" readonly placeholder="Otomatis terisi">
-              </div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col-12">
-              <div class="form-group">
-                <label>Deskripsi</label>
-                <textarea id="part_desc" name="part_desc" class="form-control" rows="2"
-                  placeholder="Otomatis terisi">{{ old('part_desc', $bom->part_desc) }}</textarea>
-              </div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>BOM Remarks</label>
-                <input type="text" name="bom_rmk" class="form-control" value="{{ old('bom_rmk', $bom->bom_rmk) }}"
-                  placeholder="Remarks">
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>Active Date</label>
-                <input type="date" name="bom_active_date" class="form-control"
-                  value="{{ old('bom_active_date', $bom->bom_active_date) }}">
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>Status</label>
-                <select name="bom_status" class="form-control">
-                  <option value="1" {{ $bom->bom_status == 1 ? 'selected' : '' }}>Active
-                  </option>
-                  <option value="0" {{ $bom->bom_status == 0 ? 'selected' : '' }}>Inactive
-                  </option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {{-- ITEM DETAIL --}}
-          <hr>
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-muted">BOM Item Detail</h5>
-            <button type="button" id="addRow" class="btn btn-success btn-sm">
-              <i class="fas fa-plus"></i> Tambah Item
-            </button>
-          </div>
-
-          <div class="table-responsive">
-            <table class="table table-bordered table-striped text-sm" id="itemTable">
-              <thead class="bg-light">
-                <tr>
-                  <th style="width: 15%">Item Number</th>
-                  <th style="width: 20%">Item Name</th>
-                  <th style="width: 20%">Description</th>
-                  <th style="width: 10%">UOM</th>
-                  <th style="width: 10%">Jumlah</th>
-                  <th style="width: 15%">Harga per Unit (Rp)</th>
-                  <th style="width: 10%" class="text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="itemBody">
-                @foreach ($bom->details as $index => $detail)
-                <tr>
-                  <td><input name="detail[{{ $index }}][part_no]" class="form-control form-control-sm detail-part-no"
-                      value="{{ $detail->part_no }}" readonly></td>
-                  <td>
-                    <div class="input-group input-group-sm">
-                      <input name="detail[{{ $index }}][part_name]"
-                        class="form-control form-control-sm detail-part-name" value="{{ $detail->part_name }}"
-                        placeholder="Klik untuk pilih" readonly style="cursor: pointer; background-color: #fff;"
-                        onclick="openMaterialModal(this)">
-                      <div class="input-group-append">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                      </div>
+    <section class="content">
+        <div class="container-fluid">
+            <div class="card card-primary card-outline">
+                <div class="card-header">
+                    <h3 class="card-title">Form Edit BOM</h3>
+                    <div class="card-tools">
+                        <a href="{{ route('production.bom.index') }}" class="btn btn-tool" title="Back to List">
+                            <i class="fas fa-times"></i>
+                        </a>
                     </div>
-                  </td>
-                  <td><input name="detail[{{ $index }}][part_desc]"
-                      class="form-control form-control-sm detail-part-desc" value="{{ $detail->part_desc }}" readonly>
-                  </td>
-                  <td><input name="detail[{{ $index }}][uom]" class="form-control form-control-sm detail-uom"
-                      value="{{ $detail->uom }}" readonly></td>
-                  <td>
-                    <input type="number" step="0.0001" name="detail[{{ $index }}][qty]"
-                      class="form-control form-control-sm" value="{{ str_replace(',', '.', $detail->bom_dtl_qty) }}"
-                      required>
-                  </td>
-                  <td>
-                    <input type="number" step="0.01" name="detail[{{ $index }}][unit_cost]"
-                      class="form-control form-control-sm" value="{{ str_replace(',', '.', $detail->bom_unit_cost) }}"
-                      required>
-                  </td>
-                  <td class="text-center">
-                    <button type="button" class="btn btn-danger btn-sm removeRow"><i class="fas fa-trash"></i></button>
-                  </td>
-                </tr>
-                @endforeach
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card-footer text-right">
-          <a href="{{ route('bom.index') }}" class="btn btn-default mr-2">
-            <i class="fas fa-times"></i> Cancel
-          </a>
-          <button type="submit" class="btn btn-primary px-4">
-            <i class="fas fa-save"></i> Update BOM
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+                </div>
 
-  {{-- Product Modal (For Main BOM Product) --}}
-  <div class="modal fade" id="productModal" tabindex="-1" aria-labelledby="productModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="productModalLabel">Pilih Produk Utama</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover table-striped text-sm" id="productTable" style="width:100%">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Item Number</th>
-                  <th>Item Name</th>
-                  <th>UOM</th>
-                  <th>Description</th>
-                  <th>Category</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+                <form action="{{ route('production.bom.update', $bom->bom_id) }}" method="POST">
+                    @csrf
+                    @method('PUT')
+                    <div class="card-body">
+                        {{-- BOM HEADER --}}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>BOM Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="bom_name" class="form-control"
+                                        value="{{ old('bom_name', $bom->bom_name) }}" placeholder="Masukkan Nama BOM"
+                                        required>
+                                </div>
+                            </div>
+                        </div>
 
-  {{-- Material Modal (For BOM Details) --}}
-  <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="materialModalLabel">Pilih Bahan Baku</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Part Number</label>
+                                    <div class="input-group">
+                                        <input type="text" id="part_no" name="part_no" class="form-control"
+                                            value="{{ old('part_no', $bom->part_no) }}" readonly
+                                            placeholder="Otomatis terisi">
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-info" data-toggle="modal"
+                                                data-target="#productModal">
+                                                <i class="fas fa-search"></i> Select
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Nama Produk</label>
+                                    <input type="text" id="part_name" name="part_name" class="form-control"
+                                        value="{{ old('part_name', $bom->part_name) }}" placeholder="Masukkan nama produk">
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>UOM</label>
+                                    <input type="text" id="uom" name="uom" class="form-control" readonly
+                                        placeholder="Otomatis terisi">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label>Deskripsi</label>
+                                    <textarea id="part_desc" name="part_desc" class="form-control" rows="2" placeholder="Otomatis terisi">{{ old('part_desc', $bom->part_desc) }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>BOM Remarks</label>
+                                    <input type="text" name="bom_rmk" class="form-control"
+                                        value="{{ old('bom_rmk', $bom->bom_rmk) }}" placeholder="Remarks">
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Active Date</label>
+                                    <input type="date" name="bom_active_date" class="form-control"
+                                        value="{{ old('bom_active_date', $bom->bom_active_date) }}">
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <select name="bom_status" class="form-control">
+                                        <option value="1" {{ $bom->bom_status == 1 ? 'selected' : '' }}>Active
+                                        </option>
+                                        <option value="0" {{ $bom->bom_status == 0 ? 'selected' : '' }}>Inactive
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- ITEM DETAIL --}}
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0 text-muted">BOM Item Detail</h5>
+                            <button type="button" id="addRow" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus"></i> Tambah Item
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped text-sm" id="itemTable">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th style="width: 15%">Item Number</th>
+                                        <th style="width: 20%">Item Name</th>
+                                        <th style="width: 20%">Description</th>
+                                        <th style="width: 10%">UOM</th>
+                                        <th style="width: 10%">Jumlah</th>
+                                        <th style="width: 15%">Harga per Unit (Rp)</th>
+                                        <th style="width: 10%" class="text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="itemBody">
+                                    @foreach ($bom->details as $index => $detail)
+                                        <tr>
+                                            <td><input name="detail[{{ $index }}][part_no]"
+                                                    class="form-control form-control-sm detail-part-no"
+                                                    value="{{ $detail->part_no }}" readonly></td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input name="detail[{{ $index }}][part_name]"
+                                                        class="form-control form-control-sm detail-part-name"
+                                                        value="{{ $detail->part_name }}" placeholder="Klik untuk pilih"
+                                                        readonly style="cursor: pointer; background-color: #fff;"
+                                                        onclick="openMaterialModal(this)">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text"><i
+                                                                class="fas fa-search"></i></span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td><input name="detail[{{ $index }}][part_desc]"
+                                                    class="form-control form-control-sm detail-part-desc"
+                                                    value="{{ $detail->part_desc }}" readonly>
+                                            </td>
+                                            <td><input name="detail[{{ $index }}][uom]"
+                                                    class="form-control form-control-sm detail-uom"
+                                                    value="{{ $detail->uom }}" readonly></td>
+                                            <td>
+                                                <input type="number" step="0.0001"
+                                                    name="detail[{{ $index }}][qty]"
+                                                    class="form-control form-control-sm"
+                                                    value="{{ str_replace(',', '.', $detail->bom_dtl_qty) }}" required>
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01"
+                                                    name="detail[{{ $index }}][unit_cost]"
+                                                    class="form-control form-control-sm"
+                                                    value="{{ str_replace(',', '.', $detail->bom_unit_cost) }}" required>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-danger btn-sm removeRow"><i
+                                                        class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer text-right">
+                        <a href="{{ route('production.bom.index') }}" class="btn btn-default mr-2">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="fas fa-save"></i> Update BOM
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-        <div class="modal-body">
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover table-striped text-sm" id="materialTable" style="width:100%">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Item Number</th>
-                  <th>Item Name</th>
-                  <th>UOM</th>
-                  <th>Description</th>
-                  <th>Category</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
+
+        {{-- Product Modal (For Main BOM Product) --}}
+        <div class="modal fade" id="productModal" tabindex="-1" aria-labelledby="productModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="productModalLabel">Pilih Produk Utama</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover table-striped text-sm" id="productTable"
+                                style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Item Number</th>
+                                        <th>Item Name</th>
+                                        <th>UOM</th>
+                                        <th>Description</th>
+                                        <th>Category</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
+
+        {{-- Material Modal (For BOM Details) --}}
+        <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="materialModalLabel">Pilih Bahan Baku</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover table-striped text-sm" id="materialTable"
+                                style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Item Number</th>
+                                        <th>Item Name</th>
+                                        <th>UOM</th>
+                                        <th>Description</th>
+                                        <th>Category</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 @endsection
 
 @push('scripts')
-<script>
-  let currentRowIndex = null;
+    <script>
+        let currentRowIndex = null;
 
         $(document).ready(function() {
             // --- 1. Product DataTable (Main Product) ---
@@ -423,5 +438,5 @@
 
             $('#materialModal').modal('show');
         }
-</script>
+    </script>
 @endpush

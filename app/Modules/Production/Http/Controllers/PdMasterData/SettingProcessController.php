@@ -22,7 +22,7 @@ class SettingProcessController extends Controller
       return DataTables::of($data)
         ->addIndexColumn()
         ->addColumn('routing_name_link', function ($row) {
-          return '<a href="' . route('setting-process.show', $row->routing_id) . '" class="text-primary">' . $row->routing_name . '</a>';
+          return '<a href="' . route('production.setting-process.show', $row->routing_id) . '" class="text-primary">' . $row->routing_name . '</a>';
         })
         ->editColumn('routing_active_date', function ($row) {
           return $row->routing_active_date ? $row->routing_active_date->format('d-m-Y') : '-';
@@ -35,8 +35,8 @@ class SettingProcessController extends Controller
           }
         })
         ->addColumn('action', function ($row) {
-          $editUrl = route('setting-process.edit', $row->routing_id);
-          $deleteUrl = route('setting-process.destroy', $row->routing_id);
+          $editUrl = route('production.setting-process.edit', $row->routing_id);
+          $deleteUrl = route('production.setting-process.destroy', $row->routing_id);
 
           return '
             <a href="' . $editUrl . '" class="btn btn-sm btn-warning">
@@ -110,7 +110,7 @@ class SettingProcessController extends Controller
       }
     }
 
-    return redirect()->route('setting-process.index')
+    return redirect()->route('production.setting-process.index')
       ->with('success', 'Routing created successfully');
   }
 
@@ -181,7 +181,7 @@ class SettingProcessController extends Controller
       }
     }
 
-    return redirect()->route('setting-process.index')
+    return redirect()->route('production.setting-process.index')
       ->with('success', 'Routing updated successfully');
   }
 

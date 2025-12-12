@@ -3,29 +3,13 @@
 @section('title', 'Lot Number')
 
 @section('content')
-<div class="content-header">
-  <div class="container-fluid">
-    <div class="row mb-2">
-      <div class="col-sm-6">
-        <h6 class="m-0">Lot Number</h6>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-right">
-          <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item active">Lot Number</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
-
 <section class="content">
   <div class="container-fluid">
     <div class="card card-primary card-outline">
       <div class="card-header">
         <h3 class="card-title">Lot Number List</h3>
         <div class="card-tools">
-          <a href="{{ route('lot_number.create') }}" class="btn btn-primary btn-sm">
+          <a href="{{ route('production.lot_number.create') }}" class="btn btn-primary btn-sm">
             <i class="fas fa-plus"></i> Add Lot
           </a>
         </div>
@@ -63,11 +47,11 @@
 </section>
 
 <!-- Include Modals -->
-@include('production.lot.modals.lot-report')
+@include('Production::production-process.wo-lot.modals.lot-report')
 
 @endsection
 
 <!-- Include Scripts -->
 @push('scripts')
-@include('production.lot.scripts.index')
+@include('Production::production-process.wo-lot.script.index')
 @endpush

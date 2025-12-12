@@ -41,7 +41,7 @@ class BomController extends Controller
         ->addColumn('action', function ($row) {
           return '
                         <div class="btn-group">
-                            <a href="' . route('bom.edit', $row->bom_id) . '" class="btn btn-sm btn-warning" title="Edit">
+                            <a href="' . route('production.bom.edit', $row->bom_id) . '" class="btn btn-sm btn-warning" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <button type="button" class="btn btn-sm btn-danger btn-delete" data-id="' . $row->bom_id . '" title="Delete">
@@ -51,7 +51,7 @@ class BomController extends Controller
                     ';
         })
         ->editColumn('bom_name', function ($row) {
-          return '<a href="' . route('bom.show', $row->bom_id) . '">' . $row->bom_name . '</a>';
+          return '<a href="' . route('production.bom.show', $row->bom_id) . '">' . $row->bom_name . '</a>';
         })
         ->rawColumns(['bom_name', 'action', 'bom_status'])
         ->make(true);
@@ -108,7 +108,7 @@ class BomController extends Controller
 
       DB::commit();
 
-      return redirect()->route('bom.index')->with('success', 'BOM berhasil disimpan.');
+      return redirect()->route('production.bom.index')->with('success', 'BOM berhasil disimpan.');
     } catch (\Exception $e) {
       DB::rollBack();
       return back()->with('error', $e->getMessage());
@@ -176,7 +176,7 @@ class BomController extends Controller
 
       DB::commit();
 
-      return redirect()->route('bom.index')->with('success', 'BOM berhasil diperbarui.');
+      return redirect()->route('production.bom.index')->with('success', 'BOM berhasil diperbarui.');
     } catch (\Exception $e) {
       DB::rollBack();
       return back()->with('error', $e->getMessage());

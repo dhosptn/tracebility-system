@@ -7,10 +7,10 @@
   <div class="container-fluid">
     <div class="row mb-3">
       <div class="col-12 text-right">
-        <a href="{{ route('bom.edit', $bom->bom_id) }}" class="btn btn-info">
+        <a href="{{ route('production.bom.edit', $bom->bom_id) }}" class="btn btn-info">
           <i class="fas fa-edit"></i> Edit
         </a>
-        <a href="{{ route('bom.index') }}" class="btn btn-danger">
+        <a href="{{ route('production.bom.index') }}" class="btn btn-danger">
           <i class="fas fa-times"></i> Back
         </a>
       </div>
