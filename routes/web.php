@@ -1,13 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
 
+Route::get('/', function () {
+  return redirect('/login');
+});
 
-Route::prefix('erp')->group(function () {
-    Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
-    Route::get('customers/create', [CustomerController::class, 'form'])->name('customers.create');
-    Route::get('customers/{id}/edit', [CustomerController::class, 'form'])->name('customers.edit');
-    Route::post('customers/save/{id?}', [CustomerController::class, 'save'])->name('customers.save');
-    Route::delete('customers/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+Route::middleware('auth')->group(function () {
+  Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+  Route::get('/home', [DashboardController::class, 'index'])->name('home');
 });
