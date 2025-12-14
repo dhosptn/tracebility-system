@@ -3,6 +3,18 @@
 @section('title', 'Create Work Order Transaction')
 
 @section('content')
+    @if (session('error'))
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: '{{ session('error') }}',
+                    timer: 5000
+                });
+            });
+        </script>
+    @endif
     <section class="content">
         <div class="container-fluid">
             <div class="card card-primary card-outline">
@@ -74,8 +86,8 @@
                                     <label for="supervisor">Supervisor</label>
                                     <select class="form-control" id="supervisor" name="supervisor">
                                         <option value="">Select Supervisor</option>
-                                        @foreach ($users as $user)
-                                            <option value="{{ $user->name }}">{{ $user->name }}</option>
+                                        @foreach ($supervisors as $supervisor)
+                                            <option value="{{ $supervisor->name }}">{{ $supervisor->name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -85,8 +97,8 @@
                                     <label for="operator">Operator</label>
                                     <select class="form-control" id="operator" name="operator">
                                         <option value="">Select Operator</option>
-                                        @foreach ($users as $user)
-                                            <option value="{{ $user->name }}">{{ $user->name }}</option>
+                                        @foreach ($operators as $operator)
+                                            <option value="{{ $operator->name }}">{{ $operator->name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -97,7 +109,7 @@
                                     <select class="form-control" id="machine" name="machine">
                                         <option value="">Select Machine</option>
                                         @foreach ($machines as $machine)
-                                            <option value="{{ $machine->machine_name }}">{{ $machine->machine_name }}
+                                            <option value="{{ $machine->id }}">{{ $machine->machine_name }}
                                             </option>
                                         @endforeach
                                     </select>
@@ -109,7 +121,11 @@
                                     <select class="form-control" id="shift" name="shift">
                                         <option value="">Select Shift</option>
                                         @foreach ($shifts as $shift)
-                                            <option value="{{ $shift }}">Shift {{ $shift }}</option>
+                                            @if (is_array($shift))
+                                                <option value="{{ $shift['id'] }}">{{ $shift['name'] }}</option>
+                                            @else
+                                                <option value="{{ $shift }}">Shift {{ $shift }}</option>
+                                            @endif
                                         @endforeach
                                     </select>
                                 </div>
@@ -160,7 +176,7 @@
                             </div>
                         </div>
 
-                        <!-- Row 4: Remain Qty, Good Qty, NG Qty, Downtime -->
+                        <!-- Row 4: Remain Qty, Good Qty, NG Qty, Notes -->
                         <div class="row">
                             <div class="col-md-3">
                                 <div class="form-group">
@@ -246,6 +262,7 @@
 @endpush
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(function() {
             // When WO No is selected, fetch WO details
@@ -254,6 +271,16 @@
                 var woNo = $(this).find(':selected').data('no');
 
                 if (woNo) {
+                    // Show loading
+                    Swal.fire({
+                        title: 'Loading...',
+                        text: 'Fetching WO details',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading()
+                        }
+                    });
+
                     $.ajax({
                         url: "{{ route('production.wo-transaction.wo-details') }}",
                         type: 'GET',
@@ -261,6 +288,7 @@
                             wo_no: woNo
                         },
                         success: function(response) {
+                            Swal.close();
                             $('#wo_qty').val(response.wo_qty);
                             $('#remain_qty').val(response.remain_qty);
 
@@ -276,8 +304,15 @@
                                 });
                             }
                         },
-                        error: function() {
-                            alert('Failed to fetch WO Details');
+                        error: function(xhr, status, error) {
+                            Swal.close();
+                            console.error('AJAX Error:', xhr.responseText);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'Failed to fetch WO Details: ' + (xhr.responseJSON
+                                    ?.message || error)
+                            });
                         }
                     });
                 } else {
@@ -287,49 +322,65 @@
                 }
             });
 
-            // Form validation
+            // Form validation and submission
             $('#wo-transaction-form').on('submit', function(e) {
-                var isValid = true;
-                var errorMessage = '';
+                e.preventDefault();
 
+                var isValid = true;
+                var errorMessages = [];
+
+                // Validation checks
                 if (!$('#wo_no').val()) {
                     isValid = false;
-                    errorMessage += 'Please select WO No.\n';
+                    errorMessages.push('Please select WO No.');
                 }
 
                 if (!$('#process_id').val()) {
                     isValid = false;
-                    errorMessage += 'Please select Process.\n';
+                    errorMessages.push('Please select Process.');
                 }
 
                 if (!$('#shift').val()) {
                     isValid = false;
-                    errorMessage += 'Please select Shift.\n';
+                    errorMessages.push('Please select Shift.');
                 }
 
                 if (!$('#start_date').val() || !$('#start_time').val()) {
                     isValid = false;
-                    errorMessage += 'Please enter Start Date and Time.\n';
+                    errorMessages.push('Please enter Start Date and Time.');
                 }
 
                 if (!$('#end_date').val() || !$('#end_time').val()) {
                     isValid = false;
-                    errorMessage += 'Please enter End Date and Time.\n';
+                    errorMessages.push('Please enter End Date and Time.');
                 }
 
-                if (!$('#good_qty').val() || !$('#ng_qty').val()) {
+                if (!$('#good_qty').val() && !$('#ng_qty').val()) {
                     isValid = false;
-                    errorMessage += 'Please enter Good Qty and NG Qty.\n';
+                    errorMessages.push('Please enter at least Good Qty or NG Qty.');
                 }
 
                 if (!isValid) {
-                    e.preventDefault();
                     Swal.fire({
                         icon: 'warning',
                         title: 'Validation Error',
-                        text: errorMessage
+                        html: errorMessages.join('<br>')
                     });
+                    return false;
                 }
+
+                // Show loading and submit
+                Swal.fire({
+                    title: 'Saving...',
+                    text: 'Please wait while saving transaction',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading()
+                    }
+                });
+
+                // Submit form
+                this.submit();
             });
         });
     </script>

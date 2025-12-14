@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class WoTransactionController extends Controller
 {
@@ -32,20 +33,34 @@ class WoTransactionController extends Controller
                 ->editColumn('process_name', function ($row) {
                     return $row->process_name ?? '-';
                 })
-                ->editColumn('good_qty', function ($row) {
-                    return (float) $row->good_qty;
+                ->editColumn('ok_qty', function ($row) {
+                    return number_format($row->ok_qty ?? 0);
                 })
                 ->editColumn('ng_qty', function ($row) {
-                    return (float) $row->ng_qty;
+                    return number_format($row->ng_qty ?? 0);
                 })
                 ->editColumn('prod_time', function ($row) {
-                    return $row->prod_time ?? '-';
+                    if ($row->start_time && $row->end_time) {
+                        $start = \Carbon\Carbon::parse($row->start_time);
+                        $end = \Carbon\Carbon::parse($row->end_time);
+                        $diffInMinutes = $start->diffInMinutes($end);
+                        $hours = floor($diffInMinutes / 60);
+                        $minutes = $diffInMinutes % 60;
+                        return sprintf('%02d:%02d', $hours, $minutes);
+                    }
+                    return '-';
                 })
                 ->editColumn('downtime', function ($row) {
-                    return $row->downtime ?? '-';
+                    // Downtime tidak ada di database baru, return default
+                    return '00:00';
                 })
                 ->editColumn('oee', function ($row) {
-                    return $row->oee ? $row->oee . '%' : '-';
+                    // Calculate OEE: (OK Qty / Actual Qty) * 100
+                    if ($row->actual_qty > 0) {
+                        $oee = round(($row->ok_qty / $row->actual_qty) * 100, 2);
+                        return $oee . '%';
+                    }
+                    return '-';
                 })
                 ->editColumn('wo_date', function ($row) {
                     return $row->workOrder && $row->workOrder->wo_date
@@ -53,8 +68,8 @@ class WoTransactionController extends Controller
                         : '-';
                 })
                 ->editColumn('prod_date', function ($row) {
-                    return $row->workOrder && $row->workOrder->prod_date
-                        ? $row->workOrder->prod_date->format('d-m-Y')
+                    return $row->trx_date
+                        ? \Carbon\Carbon::parse($row->trx_date)->format('d-m-Y')
                         : '-';
                 })
                 ->addColumn('action', function ($row) {
@@ -62,10 +77,10 @@ class WoTransactionController extends Controller
                     $showUrl = route('production.wo-transaction.show', $row->trx_id);
 
                     return '
-                        <a href="' . $showUrl . '" class="btn btn-sm btn-info">
+                        <a href="' . $showUrl . '" class="btn btn-sm btn-info" title="View Details">
                             <i class="fas fa-eye"></i> 
                         </a>
-                        <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="' . $row->trx_id . '" data-url="' . $deleteUrl . '">
+                        <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="' . $row->trx_id . '" data-url="' . $deleteUrl . '" title="Delete">
                             <i class="fas fa-trash"></i> 
                         </button>
                     ';
@@ -103,20 +118,21 @@ class WoTransactionController extends Controller
         // Machines from m_machine
         $machines = \App\Modules\Production\Models\PdMasterData\Machine::all();
 
-        // Users for Supervisor & Operator
-        $users = \App\Modules\MasterData\Models\MUser::all();
+        // Users for Supervisor & Operator - filtered by role
+        $supervisors = \App\Modules\MasterData\Models\MUser::where('role', 'supervisor')->get();
+        $operators = \App\Modules\MasterData\Models\MUser::where('role', 'operator')->get();
 
         // Setup options
         $shifts = ['1', '2', '3'];
 
-        return view('Production::production-process.wo-transaction.create', compact('autoTrxNo', 'workOrders', 'machines', 'users', 'shifts'));
+        return view('Production::production-process.wo-transaction.create', compact('autoTrxNo', 'workOrders', 'machines', 'supervisors', 'operators', 'shifts'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
             'trx_no' => 'required|unique:t_wo_transaction,trx_no',
-            'wo_no' => 'required', // This is actually wo_id from the form
+            'wo_no' => 'required',
             'process_id' => 'required',
             'shift' => 'required',
             'start_date' => 'required|date',
@@ -125,65 +141,95 @@ class WoTransactionController extends Controller
             'end_time' => 'required',
             'good_qty' => 'required|numeric|min:0',
             'ng_qty' => 'required|numeric|min:0',
+        ], [
+            'trx_no.required' => 'Transaction number is required',
+            'trx_no.unique' => 'Transaction number already exists',
+            'wo_no.required' => 'Work Order is required',
+            'process_id.required' => 'Process is required',
+            'shift.required' => 'Shift is required',
+            'start_date.required' => 'Start date is required',
+            'start_time.required' => 'Start time is required',
+            'end_date.required' => 'End date is required',
+            'end_time.required' => 'End time is required',
+            'good_qty.required' => 'Good quantity is required',
+            'ng_qty.required' => 'NG quantity is required',
         ]);
 
         DB::beginTransaction();
         try {
+            Log::info('WoTransaction Store Request:', $request->all());
+
             // Get WO details - wo_no field actually contains wo_id from the form
             $wo = WorkOrder::find($request->wo_no);
 
             if (!$wo) {
+                Log::error('WorkOrder not found with ID: ' . $request->wo_no);
                 return back()->with('error', 'Work Order not found')->withInput();
             }
 
-            // Get Process details
-            $process = MasterProcess::find($request->process_id);
+            // Get Process details from SettingDetail (routing detail)
+            $settingDetail = \App\Modules\Production\Models\PdMasterData\SettingDetail::find($request->process_id);
+            $cycleTime = 0;
+            $processName = '';
 
-            // Calculate production time and downtime
+            if ($settingDetail) {
+                $cycleTime = $settingDetail->cycle_time_second ?? 0;
+                $processName = $settingDetail->process_name ?? '';
+            } else {
+                // Fallback to MasterProcess if SettingDetail not found
+                $process = MasterProcess::find($request->process_id);
+                if ($process) {
+                    $cycleTime = $process->cycle_time_second ?? 0;
+                    $processName = $process->process_name ?? '';
+                }
+            }
+
+            // Create start and end datetime
             $startDateTime = \Carbon\Carbon::parse($request->start_date . ' ' . $request->start_time);
             $endDateTime = \Carbon\Carbon::parse($request->end_date . ' ' . $request->end_time);
 
-            $totalMinutes = $startDateTime->diffInMinutes($endDateTime);
-            $downtimeMinutes = $request->downtime ? $this->parseTimeToMinutes($request->downtime) : 0;
-            $prodTimeMinutes = $totalMinutes - $downtimeMinutes;
+            // Calculate actual qty
+            $actualQty = intval($request->good_qty ?? 0) + intval($request->ng_qty ?? 0);
 
-            // Format times as HH:MM
-            $prodTime = $this->formatMinutesToTime($prodTimeMinutes);
-            $downtime = $request->downtime ?? '00:00';
-
-            // Calculate OEE (simplified calculation)
-            $totalQty = floatval($request->good_qty) + floatval($request->ng_qty);
-            $oee = $totalQty > 0 ? round((floatval($request->good_qty) / $totalQty) * 100, 2) : 0;
-
-            WoTransaction::create([
+            $transactionData = [
                 'trx_no' => $request->trx_no,
-                'wo_no' => $wo->wo_no, // Get actual wo_no from WorkOrder record
+                'trx_date' => $request->start_date,
                 'wo_id' => $wo->wo_id,
+                'wo_no' => $wo->wo_no,
                 'process_id' => $request->process_id,
-                'process_name' => $process ? $process->process_name : '',
+                'process_name' => $processName,
+                'cycle_time' => $cycleTime,
                 'supervisor' => $request->supervisor,
                 'operator' => $request->operator,
-                'machine' => $request->machine,
-                'shift' => $request->shift,
-                'start_date' => $request->start_date,
-                'start_time' => $request->start_time,
-                'end_date' => $request->end_date,
-                'end_time' => $request->end_time,
-                'remain_qty' => $request->remain_qty ?? 0,
-                'good_qty' => $request->good_qty,
-                'ng_qty' => $request->ng_qty,
-                'downtime' => $downtime,
-                'prod_time' => $prodTime,
-                'oee' => $oee,
+                'machine_id' => $request->machine ? intval($request->machine) : null,
+                'shift_id' => $request->shift ? intval($request->shift) : null,
+                'start_time' => $startDateTime,
+                'end_time' => $endDateTime,
+                'target_qty' => intval($request->remain_qty ?? 0),
+                'actual_qty' => $actualQty,
+                'ok_qty' => intval($request->good_qty ?? 0),
+                'ng_qty' => intval($request->ng_qty ?? 0),
+                'status' => 'Draft',
+                'notes' => $request->notes,
                 'input_by' => Auth::check() ? Auth::user()->name : 'system',
                 'input_time' => now(),
                 'is_delete' => 'N'
-            ]);
+            ];
+
+            Log::info('WoTransaction Data to be created:', $transactionData);
+
+            $transaction = WoTransaction::create($transactionData);
+
+            Log::info('WoTransaction created successfully with ID: ' . $transaction->trx_id);
 
             DB::commit();
             return redirect()->route('production.wo-transaction.index')->with('success', 'Work Order Transaction created successfully');
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('WoTransaction Store Error: ' . $e->getMessage(), [
+                'request_data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return back()->with('error', 'Failed to create Work Order Transaction: ' . $e->getMessage())->withInput();
         }
     }
@@ -196,14 +242,25 @@ class WoTransactionController extends Controller
 
     public function destroy($id)
     {
-        $transaction = WoTransaction::findOrFail($id);
-        $transaction->update([
-            'is_delete' => 'Y',
-            'edit_by' => Auth::check() ? Auth::user()->name : 'system',
-            'edit_time' => now()
-        ]);
+        try {
+            $transaction = WoTransaction::findOrFail($id);
+            $transaction->update([
+                'is_delete' => 'Y',
+                'edit_by' => Auth::check() ? Auth::user()->name : 'system',
+                'edit_time' => now()
+            ]);
 
-        return response()->json(['success' => true, 'message' => 'Work Order Transaction deleted successfully']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Work Order Transaction deleted successfully'
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('WoTransaction Delete Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete Work Order Transaction: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     // Helper function to parse time string (HH:MM) to minutes

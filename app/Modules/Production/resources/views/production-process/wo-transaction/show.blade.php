@@ -1,154 +1,169 @@
 @extends('layouts.app')
 
-@section('title', 'Work Order Transaction')
+@section('title', 'Transaction Detail')
 
 @section('content')
-<div class="content-header">
-  <div class="container-fluid">
-    <div class="row mb-2">
-      <div class="col-sm-6">
-        <h6 class="m-0">Work Order Transaction</h6>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-right">
-          <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item active">Work Order Transaction</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+    <section class="content">
+        <div class="container-fluid">
+            <div class="card card-primary card-outline">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-eye mr-1"></i>
+                        Transaction Detail
+                    </h3>
+                    <div class="card-tools">
+                        <a href="{{ route('production.wo-transaction.index') }}" class="btn btn-default btn-sm">
+                            <i class="fas fa-arrow-left"></i> Back to List
+                        </a>
+                    </div>
 
-<section class="content">
-  <div class="container-fluid">
-    <div class="card card-primary card-outline">
-      <div class="card-header">
-        <h3 class="card-title">
-          <i class="fas fa-list mr-1"></i>
-          Work Order Transaction List
-        </h3>
-        <div class="card-tools">
-          <a href="{{ route('production.wo-transaction.create') }}" class="btn btn-primary btn-sm">
-            <i class="fas fa-plus"></i> Create New Transaction
-          </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <th width="40%">Transaction No</th>
+                                    <td>{{ $transaction->trx_no }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Transaction Date</th>
+                                    <td>{{ $transaction->trx_date ? \Carbon\Carbon::parse($transaction->trx_date)->format('d-m-Y') : '-' }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>WO No</th>
+                                    <td>{{ $transaction->wo_no }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Part Name</th>
+                                    <td>{{ $transaction->workOrder ? $transaction->workOrder->part_name : '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Part No</th>
+                                    <td>{{ $transaction->workOrder ? $transaction->workOrder->part_no : '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Process</th>
+                                    <td>{{ $transaction->process_name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Cycle Time</th>
+                                    <td>{{ $transaction->cycle_time }} seconds</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <th width="40%">Supervisor</th>
+                                    <td>{{ $transaction->supervisor ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Operator</th>
+                                    <td>{{ $transaction->operator ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Machine</th>
+                                    <td>{{ $transaction->machine ? $transaction->machine->machine_name : '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Shift</th>
+                                    <td>Shift {{ $transaction->shift_id ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Start Time</th>
+                                    <td>{{ $transaction->start_time ? \Carbon\Carbon::parse($transaction->start_time)->format('d-m-Y H:i') : '-' }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>End Time</th>
+                                    <td>{{ $transaction->end_time ? \Carbon\Carbon::parse($transaction->end_time)->format('d-m-Y H:i') : '-' }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Status</th>
+                                    <td>
+                                        <span
+                                            class="badge badge-{{ $transaction->status == 'Draft' ? 'secondary' : 'success' }}">
+                                            {{ $transaction->status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h5>Production Quantity</h5>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr class="bg-light">
+                                        <th>Target Qty</th>
+                                        <th>Actual Qty</th>
+                                        <th>OK Qty</th>
+                                        <th>NG Qty</th>
+                                        <th>OEE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-center">{{ number_format($transaction->target_qty ?? 0) }}</td>
+                                        <td class="text-center">{{ number_format($transaction->actual_qty ?? 0) }}</td>
+                                        <td class="text-center">{{ number_format($transaction->ok_qty ?? 0) }}</td>
+                                        <td class="text-center">{{ number_format($transaction->ng_qty ?? 0) }}</td>
+                                        <td class="text-center">
+                                            @php
+                                                $oee = 0;
+                                                if ($transaction->actual_qty > 0) {
+                                                    $oee = round(
+                                                        ($transaction->ok_qty / $transaction->actual_qty) * 100,
+                                                        2,
+                                                    );
+                                                }
+                                            @endphp
+                                            {{ $oee }}%
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    @if ($transaction->notes)
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <h5>Notes</h5>
+                                <p>{{ $transaction->notes }}</p>
+                            </div>
+                        </div>
+                    @endif
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                Created by: {{ $transaction->input_by ?? '-' }}<br>
+                                Created at:
+                                {{ $transaction->input_time ? \Carbon\Carbon::parse($transaction->input_time)->format('d-m-Y H:i:s') : '-' }}
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <small class="text-muted">
+                                @if ($transaction->edit_by)
+                                    Last edited by: {{ $transaction->edit_by }}<br>
+                                    Last edited at:
+                                    {{ $transaction->edit_time ? \Carbon\Carbon::parse($transaction->edit_time)->format('d-m-Y H:i:s') : '-' }}
+                                @endif
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="card-body">
-        <table class="table table-bordered table-striped table-hover text-sm" id="wo-transaction-table"
-          style="width: 100%">
-          <thead>
-            <tr>
-              <th width="5%">No</th>
-              <th>WO No</th>
-              <th>Item</th>
-              <th>Process Name</th>
-              <th>Total Qty OK</th>
-              <th>Total Qty NG</th>
-              <th>Prod. Time</th>
-              <th>Downtime</th>
-              <th>OEE</th>
-              <th>WO Date</th>
-              <th>Production Date</th>
-              <th width="10%">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</section>
+    </section>
 @endsection
-
-@push('scripts')
-<script>
-  $(document).ready(function () {
-    var table = $('#wo-transaction-table').DataTable({
-      processing: true,
-      serverSide: true,
-      ajax: "{{ route('production.wo-transaction.index') }}",
-      columns: [
-        { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
-        { data: 'wo_no', name: 'wo_no' },
-        { data: 'item', name: 'item' },
-        { data: 'process_name', name: 'process_name' },
-        { data: 'good_qty', name: 'good_qty', className: 'text-right', render: function(data) { return parseFloat(data); } },
-        { data: 'ng_qty', name: 'ng_qty', className: 'text-right', render: function(data) { return parseFloat(data); } },
-        { data: 'prod_time', name: 'prod_time', className: 'text-center' },
-        { data: 'downtime', name: 'downtime', className: 'text-center' },
-        { data: 'oee', name: 'oee', className: 'text-center' },
-        { data: 'wo_date', name: 'wo_date', className: 'text-center' },
-        { data: 'prod_date', name: 'prod_date', className: 'text-center' },
-        { data: 'action', name: 'action', orderable: false, searchable: false }
-      ],
-      responsive: true,
-      autoWidth: false,
-      language: {
-        processing: "Loading...",
-      }
-    });
-
-    // Delete button handler
-    $('#wo-transaction-table').on('click', '.delete-btn', function () {
-      var id = $(this).data('id');
-      var url = $(this).data('url');
-
-      Swal.fire({
-        title: 'Are you sure?',
-        text: "You won't be able to revert this!",
-        icon: 'warning',
-        showCancelButton: true,
-        reverseButtons: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it!'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          $.ajax({
-            url: url,
-            type: 'DELETE',
-            data: {
-              _token: '{{ csrf_token() }}'
-            },
-            success: function (response) {
-              Swal.fire(
-                'Deleted!',
-                response.message,
-                'success'
-              );
-              table.ajax.reload();
-            },
-            error: function (xhr) {
-              Swal.fire(
-                'Error!',
-                'Failed to delete transaction.',
-                'error'
-              );
-            }
-          });
-        }
-      });
-    });
-
-    // Success/Error messages
-    @if(session('success'))
-    Swal.fire({
-      icon: 'success',
-      title: 'Success',
-      text: '{{ session('success') }}',
-      timer: 3000
-    });
-    @endif
-
-    @if(session('error'))
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: '{{ session('error') }}',
-      timer: 3000
-    });
-    @endif
-  });
-</script>
-@endpush

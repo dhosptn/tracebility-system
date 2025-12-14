@@ -8,8 +8,10 @@ class Bom extends Model
 {
   protected $table = 'm_bom';
   protected $primaryKey = 'bom_id';
+  public $timestamps = false;
 
   protected $fillable = [
+    'bom_no',
     'bom_name',
     'part_no',
     'part_name',

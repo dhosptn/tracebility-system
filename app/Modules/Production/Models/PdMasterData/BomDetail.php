@@ -8,11 +8,10 @@ class BomDetail extends Model
 {
   protected $table = 'm_bom_detail';
   protected $primaryKey = 'bom_dtl_id';
+  public $timestamps = false;
 
   protected $casts = [
-    'bom_dtl_qty' => 'float',
-    'bom_unit_cost' => 'float',
-    'bom_total_cost' => 'float',
+    'bom_dtl_qty' => 'string',
   ];
 
   protected $fillable = [
@@ -22,7 +21,5 @@ class BomDetail extends Model
     'part_desc',
     'uom',
     'bom_dtl_qty',
-    'bom_unit_cost',
-    'bom_total_cost',
   ];
 }

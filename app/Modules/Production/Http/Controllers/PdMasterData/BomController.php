@@ -78,10 +78,23 @@ class BomController extends Controller
    */
   public function store(Request $request)
   {
+    // Basic validation
+    $request->validate([
+      'bom_name' => 'required|string|max:100',
+      'part_no' => 'required|string|max:50',
+      'part_name' => 'required|string|max:100',
+      'bom_active_date' => 'required|date',
+      'bom_status' => 'required|in:0,1',
+    ]);
+
     DB::beginTransaction();
 
     try {
+      // Generate BOM number
+      $bomNo = 'BOM-' . date('Ymd') . '-' . str_pad(Bom::where('is_delete', 'N')->count() + 1, 4, '0', STR_PAD_LEFT);
+
       $bom = Bom::create([
+        'bom_no'          => $bomNo,
         'bom_name'        => $request->bom_name,
         'part_no'         => $request->part_no,
         'part_name'       => $request->part_name,
@@ -89,21 +102,23 @@ class BomController extends Controller
         'bom_rmk'         => $request->bom_rmk,
         'bom_active_date' => $request->bom_active_date,
         'bom_status'      => $request->bom_status,
-        'input_by'        => auth()->user()->name ?? 'System',
+        'input_by'        => auth()->check() ? auth()->user()->name : 'System',
         'input_date'      => now(),
       ]);
 
-      foreach ($request->detail as $row) {
-        BomDetail::create([
-          'bom_id'         => $bom->bom_id,
-          'part_no'        => $row['part_no'],
-          'part_name'      => $row['part_name'],
-          'part_desc'      => $row['part_desc'],
-          'uom'            => $row['uom'],
-          'bom_dtl_qty'    => $row['qty'],
-          'bom_unit_cost'  => $row['unit_cost'],
-          'bom_total_cost' => $row['qty'] * $row['unit_cost'],
-        ]);
+      if ($request->has('detail') && is_array($request->detail)) {
+        foreach ($request->detail as $row) {
+          if (!empty($row['part_no'])) { // Only create if part_no is not empty
+            BomDetail::create([
+              'bom_id'         => $bom->bom_id,
+              'part_no'        => $row['part_no'],
+              'part_name'      => $row['part_name'],
+              'part_desc'      => $row['part_desc'],
+              'uom'            => $row['uom'],
+              'bom_dtl_qty'    => $row['qty'] ?? '0',
+            ]);
+          }
+        }
       }
 
       DB::commit();
@@ -111,7 +126,7 @@ class BomController extends Controller
       return redirect()->route('production.bom.index')->with('success', 'BOM berhasil disimpan.');
     } catch (\Exception $e) {
       DB::rollBack();
-      return back()->with('error', $e->getMessage());
+      return back()->withErrors(['error' => $e->getMessage()])->withInput();
     }
   }
 
@@ -151,7 +166,7 @@ class BomController extends Controller
         'bom_rmk'         => $request->bom_rmk,
         'bom_active_date' => $request->bom_active_date,
         'bom_status'      => $request->bom_status,
-        'update_by'       => auth()->user()->name ?? 'System',
+        'update_by'       => auth()->check() ? auth()->user()->name : 'System',
         'update_date'     => now(),
       ]);
 
@@ -159,18 +174,18 @@ class BomController extends Controller
       BomDetail::where('bom_id', $bom->bom_id)->delete();
 
       // Insert new details
-      if ($request->has('detail')) {
+      if ($request->has('detail') && is_array($request->detail)) {
         foreach ($request->detail as $row) {
-          BomDetail::create([
-            'bom_id'         => $bom->bom_id,
-            'part_no'        => $row['part_no'],
-            'part_name'      => $row['part_name'],
-            'part_desc'      => $row['part_desc'],
-            'uom'            => $row['uom'],
-            'bom_dtl_qty'    => $row['qty'],
-            'bom_unit_cost'  => $row['unit_cost'],
-            'bom_total_cost' => $row['qty'] * $row['unit_cost'],
-          ]);
+          if (!empty($row['part_no'])) { // Only create if part_no is not empty
+            BomDetail::create([
+              'bom_id'         => $bom->bom_id,
+              'part_no'        => $row['part_no'],
+              'part_name'      => $row['part_name'],
+              'part_desc'      => $row['part_desc'],
+              'uom'            => $row['uom'],
+              'bom_dtl_qty'    => $row['qty'] ?? '0',
+            ]);
+          }
         }
       }
 
@@ -195,7 +210,7 @@ class BomController extends Controller
       $bom = Bom::findOrFail($id);
       $bom->update([
         'is_delete'   => 'Y',
-        'delete_by'   => auth()->user()->name ?? 'System',
+        'delete_by'   => auth()->check() ? auth()->user()->name : 'System',
         'delete_date' => now(),
       ]);
 

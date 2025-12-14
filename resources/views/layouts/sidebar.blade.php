@@ -56,7 +56,7 @@
                         </li>
                     </ul>
                 </li>
-
+                <li class="nav-header">PRODUCTION</li>
                 <li class="nav-item has-treeview {{ request()->is('production*') ? 'menu-open' : '' }}">
                     <a href="#" class="nav-link {{ request()->is('production*') ? 'active' : '' }}">
                         <i class="nav-icon fas fa-industry"></i>
@@ -67,6 +67,13 @@
                     </a>
                     <ul class="nav nav-treeview">
                         <li class="nav-header">PRODUCTION PROCESS</li>
+                        <li class="nav-item">
+                            <a href="{{ route('production.production-monitoring.index') }}"
+                                class="nav-link {{ request()->routeIs('production.production-monitoring.*') ? 'active' : '' }}">
+                                <i class="far fa-circle nav-icon"></i>
+                                <p>Production Monitoring</p>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a href="{{ route('production.work-order.index') }}"
                                 class="nav-link {{ request()->routeIs('production.work-order.*') ? 'active' : '' }}">

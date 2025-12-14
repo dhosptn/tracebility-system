@@ -288,29 +288,49 @@ class WoLotController extends Controller
       $transactions = [];
       $workOrders = $lot->workOrders()->get();
 
+      $cumTotalQty = 0;
+      $cumNgQty = 0;
+      $cumOkQty = 0;
+
       foreach ($workOrders as $wo) {
         // Get WO transactions from WoTransaction model
         $woTransactions = \App\Modules\Production\Models\ProductionProcess\WoTransaction::where('wo_no', $wo->wo_no)
           ->where('is_delete', 'N')
+          ->orderBy('trx_date', 'asc')
           ->get();
 
         foreach ($woTransactions as $trx) {
+          $totalQty = ($trx->ok_qty ?? 0) + ($trx->ng_qty ?? 0);
+          $cumTotalQty += $totalQty;
+          $cumNgQty += ($trx->ng_qty ?? 0);
+          $cumOkQty += ($trx->ok_qty ?? 0);
+
+          // Get machine name from relationship
+          $machineName = '-';
+          if ($trx->machine_id) {
+            $machine = \App\Modules\Production\Models\PdMasterData\Machine::find($trx->machine_id);
+            $machineName = $machine ? $machine->machine_name : '-';
+          }
+
+          // Get shift name
+          $shiftName = $trx->shift_id ? 'Shift ' . $trx->shift_id : '-';
+
           $transactions[] = [
             'wo_no' => $wo->wo_no ?? '-',
             'process_name' => $trx->process_name ?? '-',
-            'machine' => $trx->machine ?? '-',
-            'prod_date' => $trx->start_date ? date('d-m-Y', strtotime($trx->start_date)) : '-',
-            'total_qty' => ($trx->good_qty + $trx->ng_qty) ?? 0,
-            'cum_total' => ($trx->good_qty + $trx->ng_qty) ?? 0, // You may need to calculate cumulative
-            'shift' => $trx->shift ?? '-',
+            'machine' => $machineName,
+            'prod_date' => $trx->trx_date ? date('d-m-Y', strtotime($trx->trx_date)) : '-',
+            'total_qty' => $totalQty,
+            'cum_total' => $cumTotalQty,
+            'shift' => $shiftName,
             'ng_qty' => $trx->ng_qty ?? 0,
-            'cum_ng' => $trx->ng_qty ?? 0, // You may need to calculate cumulative
-            'ok_qty' => $trx->good_qty ?? 0,
-            'cum_ok' => $trx->good_qty ?? 0, // You may need to calculate cumulative
+            'cum_ng' => $cumNgQty,
+            'ok_qty' => $trx->ok_qty ?? 0,
+            'cum_ok' => $cumOkQty,
             'operator' => $trx->operator ?? '-',
-            'ambil_qty' => 0, // Not available in current structure
-            'sisa_qty' => 0, // Not available in current structure
-            'remark' => '', // Not available in current structure
+            'ambil_qty' => 0,
+            'sisa_qty' => 0,
+            'remark' => $trx->notes ?? '',
           ];
         }
       }

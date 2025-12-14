@@ -15,4 +15,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware('auth')->group(function () {
   Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
   Route::get('/home', [DashboardController::class, 'index'])->name('home');
+
+  require app_path('Modules/MasterData/Routes/web.php');
+  require app_path('Modules/Production/Routes/web.php');
 });

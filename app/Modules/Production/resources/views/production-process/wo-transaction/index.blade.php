@@ -46,6 +46,7 @@
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(function() {
             var table = $('#wo-transaction-table').DataTable({
@@ -71,20 +72,14 @@
                         name: 'process_name'
                     },
                     {
-                        data: 'good_qty',
-                        name: 'good_qty',
-                        className: 'text-right',
-                        render: function(data) {
-                            return parseFloat(data);
-                        }
+                        data: 'ok_qty',
+                        name: 'ok_qty',
+                        className: 'text-right'
                     },
                     {
                         data: 'ng_qty',
                         name: 'ng_qty',
-                        className: 'text-right',
-                        render: function(data) {
-                            return parseFloat(data);
-                        }
+                        className: 'text-right'
                     },
                     {
                         data: 'prod_time',
@@ -126,9 +121,11 @@
             });
 
             // Delete button handler
-            $('#wo-transaction-table').on('click', '.delete-btn', function() {
+            $(document).on('click', '.delete-btn', function(e) {
+                e.preventDefault();
                 var id = $(this).data('id');
                 var url = $(this).data('url');
+                var csrfToken = $('meta[name="csrf-token"]').attr('content');
 
                 Swal.fire({
                     title: 'Are you sure?',
@@ -144,8 +141,8 @@
                         $.ajax({
                             url: url,
                             type: 'DELETE',
-                            data: {
-                                _token: '{{ csrf_token() }}'
+                            headers: {
+                                'X-CSRF-TOKEN': csrfToken
                             },
                             success: function(response) {
                                 Swal.fire(
@@ -155,10 +152,15 @@
                                 );
                                 table.ajax.reload();
                             },
-                            error: function(xhr) {
+                            error: function(xhr, status, error) {
+                                console.error('Delete Error:', xhr.responseText);
+                                var message = 'Failed to delete transaction.';
+                                if (xhr.responseJSON && xhr.responseJSON.message) {
+                                    message = xhr.responseJSON.message;
+                                }
                                 Swal.fire(
                                     'Error!',
-                                    'Failed to delete transaction.',
+                                    message,
                                     'error'
                                 );
                             }
