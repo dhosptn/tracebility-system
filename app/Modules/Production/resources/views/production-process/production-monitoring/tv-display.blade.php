@@ -449,27 +449,32 @@
     <script>
         const monitoringId = {{ $monitoring->monitoring_id }};
 
-        // Update Clock and Date
+        // Update Clock and Date (Indonesia Timezone - WIB UTC+7)
         function updateClock() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('en-US', {
-                hour12: false,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            const dateString = now.toLocaleDateString('en-GB', {
+            // Convert to Indonesia timezone (WIB - UTC+7)
+            const indonesiaTime = new Date(now.toLocaleString('en-US', {
+                timeZone: 'Asia/Jakarta'
+            }));
+
+            const hours = String(indonesiaTime.getHours()).padStart(2, '0');
+            const minutes = String(indonesiaTime.getMinutes()).padStart(2, '0');
+            const seconds = String(indonesiaTime.getSeconds()).padStart(2, '0');
+            const timeString = `${hours}:${minutes}:${seconds}`;
+
+            const dateString = indonesiaTime.toLocaleDateString('id-ID', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric'
             });
+
             $('#clock').text(timeString);
             $('#date').text(dateString);
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Calculate Estimated Finish Time
+        // Calculate Estimated Finish Time (Indonesia Timezone - WIB UTC+7)
         function calculateFinishTime(actualQty, targetQty, avgCycleTime) {
             if (actualQty >= targetQty) {
                 return "COMPLETED";
@@ -480,11 +485,15 @@
             const remainingQty = targetQty - actualQty;
             const remainingSeconds = remainingQty * avgCycleTime;
             const finishTime = new Date(Date.now() + remainingSeconds * 1000);
-            return finishTime.toLocaleTimeString('en-US', {
-                hour12: false,
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+
+            // Convert to Indonesia timezone (WIB - UTC+7)
+            const indonesiaFinishTime = new Date(finishTime.toLocaleString('en-US', {
+                timeZone: 'Asia/Jakarta'
+            }));
+            const hours = String(indonesiaFinishTime.getHours()).padStart(2, '0');
+            const minutes = String(indonesiaFinishTime.getMinutes()).padStart(2, '0');
+
+            return `${hours}:${minutes}`;
         }
 
         // Update Finish Time
@@ -584,41 +593,150 @@
             }
         }
 
-        // Fetch Data from Server
+        // Store previous values for change detection
+        let previousData = {
+            qty_actual: {{ $monitoring->qty_actual }},
+            qty_ng: {{ $monitoring->qty_ng }},
+            qty_ok: {{ $monitoring->qty_ok }},
+            oee: 0,
+            availability: 0,
+            performance: 0,
+            quality: 0,
+            uptime: 0,
+            avg_cycle_time: {{ $monitoring->cycle_time }},
+            last_cycle_time: 0,
+            high_cycle_time: 0,
+            low_cycle_time: 0
+        };
+
+        // Fetch Data from Server (Realtime)
         function fetchData() {
+            console.log('Fetching data for monitoring ID:', monitoringId);
             $.ajax({
                 url: `/production/production-monitoring/${monitoringId}/tv-data`,
                 type: 'GET',
                 success: function(data) {
-                    $('#actualQty').text(data.qty_actual);
-                    $('#ngQty').text(data.qty_ng);
+                    console.log('✓ Realtime Data Received:', data);
+                    console.log('OEE Metrics:', {
+                        oee: data.oee,
+                        availability: data.availability,
+                        performance: data.performance,
+                        quality: data.quality,
+                        uptime: data.uptime
+                    });
+                    console.log('Cycle Times:', {
+                        avg: data.avg_cycle_time,
+                        last: data.last_cycle_time,
+                        high: data.high_cycle_time,
+                        low: data.low_cycle_time
+                    });
+                    // Update QTY with animation if changed
+                    if (data.qty_actual !== previousData.qty_actual) {
+                        animateValue('#actualQty', previousData.qty_actual, data.qty_actual);
+                        previousData.qty_actual = data.qty_actual;
+                    }
 
+                    if (data.qty_ng !== previousData.qty_ng) {
+                        animateValue('#ngQty', previousData.qty_ng, data.qty_ng);
+                        previousData.qty_ng = data.qty_ng;
+                    }
+
+                    // Update Progress
                     const progress = (data.qty_ok / data.wo_qty * 100).toFixed(1);
                     $('#progressPercent').text(progress + '%');
 
+                    // Update Status
                     updateStatus(data.current_status);
 
-                    $('#oee').text(data.oee);
-                    $('#availability').text(data.availability);
-                    $('#performance').text(data.performance);
-                    $('#quality').text(data.quality);
-                    $('#uptime').text(data.uptime);
+                    // Update OEE Metrics with smooth transition
+                    updateMetricValue('#oee', data.oee, previousData.oee);
+                    updateMetricValue('#availability', data.availability, previousData.availability);
+                    updateMetricValue('#performance', data.performance, previousData.performance);
+                    updateMetricValue('#quality', data.quality, previousData.quality);
+                    updateMetricValue('#uptime', data.uptime, previousData.uptime);
 
-                    $('#avgCycleTime').text(data.avg_cycle_time);
-                    $('#lastCycleTime').text(data.last_cycle_time);
-                    $('#highCycleTime').text(data.high_cycle_time);
-                    $('#lowCycleTime').text(data.low_cycle_time);
+                    // Update Cycle Times with animation
+                    updateMetricValue('#avgCycleTime', data.avg_cycle_time, previousData.avg_cycle_time);
+                    updateMetricValue('#lastCycleTime', data.last_cycle_time, previousData.last_cycle_time ||
+                        0);
+                    updateMetricValue('#highCycleTime', data.high_cycle_time, previousData.high_cycle_time ||
+                        0);
+                    updateMetricValue('#lowCycleTime', data.low_cycle_time, previousData.low_cycle_time || 0);
 
+                    // Update Finish Time
                     updateFinishTime(data.qty_actual, data.wo_qty, data.avg_cycle_time);
 
+                    // Update Timeline
                     if (data.timeline) {
                         updateTimeline(data.timeline);
                     }
+
+                    // Store current values
+                    previousData.oee = data.oee;
+                    previousData.availability = data.availability;
+                    previousData.performance = data.performance;
+                    previousData.quality = data.quality;
+                    previousData.uptime = data.uptime;
+                    previousData.avg_cycle_time = data.avg_cycle_time;
+                    previousData.last_cycle_time = data.last_cycle_time;
+                    previousData.high_cycle_time = data.high_cycle_time;
+                    previousData.low_cycle_time = data.low_cycle_time;
                 },
-                error: function() {
-                    console.error('Failed to fetch data');
+                error: function(xhr, status, error) {
+                    console.error('❌ Failed to fetch data');
+                    console.error('Status:', status);
+                    console.error('Error:', error);
+                    console.error('Response:', xhr.responseText);
                 }
             });
+        }
+
+        // Animate value changes
+        function animateValue(selector, start, end) {
+            const element = $(selector);
+            const duration = 500; // 500ms animation
+            const steps = 20;
+            const increment = (end - start) / steps;
+            let current = start;
+            let step = 0;
+
+            const timer = setInterval(function() {
+                step++;
+                current += increment;
+                if (step >= steps) {
+                    element.text(Math.round(end));
+                    clearInterval(timer);
+                } else {
+                    element.text(Math.round(current));
+                }
+            }, duration / steps);
+        }
+
+        // Update metric value with color change if improved
+        function updateMetricValue(selector, newValue, oldValue) {
+            const element = $(selector);
+            const numNew = parseFloat(newValue) || 0;
+            const numOld = parseFloat(oldValue) || 0;
+
+            console.log(`Updating ${selector}: ${numOld} -> ${numNew}`);
+
+            // Always update the text
+            element.text(numNew);
+
+            // Flash color if changed
+            if (numNew > numOld) {
+                // Improved - flash green
+                element.css('color', '#4ade80');
+                setTimeout(() => {
+                    element.css('color', '#ffffff');
+                }, 300);
+            } else if (numNew < numOld) {
+                // Decreased - flash red
+                element.css('color', '#ef4444');
+                setTimeout(() => {
+                    element.css('color', '#ffffff');
+                }, 300);
+            }
         }
 
         // Initial finish time calculation
@@ -628,8 +746,8 @@
             {{ $monitoring->cycle_time }}
         );
 
-        // Auto refresh every 5 seconds
-        setInterval(fetchData, 5000);
+        // Auto refresh every 2 seconds for realtime updates
+        setInterval(fetchData, 2000);
         fetchData();
 
         // Modal Functions

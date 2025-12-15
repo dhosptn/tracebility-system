@@ -119,11 +119,14 @@ class MqttProductionListener extends Command
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
 
+      // Record OK timestamp for cycle time calculation
+      $this->recordOkTimestamp($monitoringId);
+
       // Broadcast to frontend via cache/event
       Cache::put("mqtt_qty_ok_{$monitoringId}", [
         'qty_ok' => $monitoring->qty_ok,
         'qty_actual' => $monitoring->qty_actual,
-        'timestamp' => now()->toIso8601String()
+        'timestamp' => now('Asia/Jakarta')->toIso8601String()
       ], 60);
 
       $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty}");
@@ -171,6 +174,9 @@ class MqttProductionListener extends Command
         return;
       }
 
+      // Get current time in Indonesia timezone (WIB - UTC+7)
+      $nowIndonesia = now('Asia/Jakarta');
+
       // Close previous status log
       $lastLog = ProductionStatusLog::where('monitoring_id', $monitoringId)
         ->whereNull('end_time')
@@ -179,23 +185,23 @@ class MqttProductionListener extends Command
 
       if ($lastLog) {
         $lastLog->update([
-          'end_time' => now(),
-          'duration_seconds' => now()->diffInSeconds($lastLog->start_time)
+          'end_time' => $nowIndonesia,
+          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
         ]);
       }
 
-      // Create new status log
+      // Create new status log (Indonesia Timezone - WIB UTC+7)
       ProductionStatusLog::create([
         'monitoring_id' => $monitoringId,
         'status' => $normalizedStatus,
-        'start_time' => now(),
-        'created_at' => now()
+        'start_time' => $nowIndonesia,
+        'created_at' => $nowIndonesia
       ]);
 
       // Update monitoring status
       $monitoring->update([
         'current_status' => $normalizedStatus,
-        'updated_at' => now()
+        'updated_at' => $nowIndonesia
       ]);
 
       // Signal frontend to show form if needed
@@ -261,5 +267,22 @@ class MqttProductionListener extends Command
       Log::error('Error handling NG: ' . $e->getMessage());
       $this->error("ERROR: " . $e->getMessage());
     }
+  }
+
+  /**
+   * Record OK timestamp for cycle time calculation
+   */
+  private function recordOkTimestamp($monitoringId)
+  {
+    $cacheKey = "ok_timestamps_{$monitoringId}";
+    $timestamps = Cache::get($cacheKey, []);
+    $timestamps[] = now('Asia/Jakarta')->toIso8601String();
+
+    // Keep only last 100 timestamps to avoid memory issues
+    if (count($timestamps) > 100) {
+      $timestamps = array_slice($timestamps, -100);
+    }
+
+    Cache::put($cacheKey, $timestamps, 86400); // 24 hours
   }
 }

@@ -8,6 +8,7 @@ use App\Modules\Production\Models\PdMasterData\Setting;
 use App\Modules\Production\Models\PdMasterData\Machine;
 use App\Modules\Production\Models\PdMasterData\Shift;
 use App\Modules\MasterData\Models\MUser;
+use App\Modules\Production\Services\OeeCalculationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -126,6 +127,9 @@ class ProductionMonitoringController extends Controller
     // Get process details
     $processDetail = $wo->routing->details->where('process_id', $request->process_id)->first();
 
+    // Get current time in Indonesia timezone (WIB - UTC+7)
+    $nowIndonesia = now('Asia/Jakarta');
+
     // Create production monitoring record
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::create([
       'wo_no' => $request->wo_no,
@@ -137,22 +141,22 @@ class ProductionMonitoringController extends Controller
       'operator' => $request->operator,
       'machine_id' => $request->machine_id,
       'shift_id' => $request->shift_id,
-      'start_time' => now(),
+      'start_time' => $nowIndonesia,
       'current_status' => 'Ready',
       'qty_ok' => 0,
       'qty_ng' => 0,
       'qty_actual' => 0,
       'is_active' => 1,
       'created_by' => auth()->check() ? auth()->user()->name : 'system',
-      'created_at' => now()
+      'created_at' => $nowIndonesia
     ]);
 
     // Create initial status log
     \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::create([
       'monitoring_id' => $monitoring->monitoring_id,
       'status' => 'Ready',
-      'start_time' => now(),
-      'created_at' => now()
+      'start_time' => $nowIndonesia,
+      'created_at' => $nowIndonesia
     ]);
 
     return response()->json([
@@ -201,39 +205,21 @@ class ProductionMonitoringController extends Controller
       }
     ])->findOrFail($id);
 
-    // Calculate OEE metrics
-    $quality = $monitoring->qty_actual > 0 ? ($monitoring->qty_ok / $monitoring->qty_actual * 100) : 0;
+    // Get realtime OEE metrics from service
+    $metrics = OeeCalculationService::getRealtimeMetrics($id);
 
-    // Calculate availability (time running / total time)
-    $totalTime = now()->diffInSeconds($monitoring->start_time);
-    $runningTime = $monitoring->statusLogs->where('status', 'Running')->sum('duration_seconds');
-    $availability = $totalTime > 0 ? ($runningTime / $totalTime * 100) : 0;
+    // Log metrics for debugging
+    \Log::info("OEE Metrics for monitoring {$id}", $metrics);
 
-    // Calculate performance (actual output / expected output)
-    $expectedOutput = $monitoring->cycle_time > 0 ? ($runningTime / $monitoring->cycle_time) : 0;
-    $performance = $expectedOutput > 0 ? ($monitoring->qty_actual / $expectedOutput * 100) : 0;
-
-    // OEE = Availability × Performance × Quality
-    $oee = ($availability / 100) * ($performance / 100) * ($quality / 100) * 100;
-
-    // Calculate cycle times (mock data for now - you can enhance this)
-    $avgCycleTime = $monitoring->cycle_time;
-    $lastCycleTime = $monitoring->cycle_time;
-    $highCycleTime = $monitoring->cycle_time * 1.2;
-    $lowCycleTime = $monitoring->cycle_time * 0.8;
-
-    // Prepare timeline data
+    // Prepare timeline data (Indonesia Timezone - WIB UTC+7)
     $timeline = $monitoring->statusLogs->map(function ($log) {
+      $indonesiaTime = $log->start_time->setTimezone('Asia/Jakarta');
       return [
-        'time' => $log->start_time->format('H:i'),
+        'time' => $indonesiaTime->format('H:i'),
         'status' => $log->status,
         'duration' => $log->duration_seconds ?? 0
       ];
     });
-
-    // Check for MQTT signals
-    $showDowntimeForm = Cache::pull("mqtt_show_downtime_form_{$id}", false);
-    $showNgForm = Cache::pull("mqtt_show_ng_form_{$id}", false);
 
     return response()->json([
       'wo_qty' => $monitoring->wo_qty,
@@ -241,19 +227,16 @@ class ProductionMonitoringController extends Controller
       'qty_ng' => $monitoring->qty_ng,
       'qty_ok' => $monitoring->qty_ok,
       'current_status' => $monitoring->current_status,
-      'oee' => number_format($oee, 1),
-      'availability' => number_format($availability, 1),
-      'performance' => number_format($performance, 1),
-      'quality' => number_format($quality, 1),
-      'avg_cycle_time' => number_format($avgCycleTime, 1),
-      'last_cycle_time' => number_format($lastCycleTime, 1),
-      'high_cycle_time' => number_format($highCycleTime, 1),
-      'low_cycle_time' => number_format($lowCycleTime, 1),
-      'timeline' => $timeline,
-      'mqtt_signals' => [
-        'show_downtime_form' => $showDowntimeForm,
-        'show_ng_form' => $showNgForm
-      ]
+      'oee' => $metrics['oee'],
+      'availability' => $metrics['availability'],
+      'performance' => $metrics['performance'],
+      'quality' => $metrics['quality'],
+      'uptime' => $metrics['uptime'],
+      'avg_cycle_time' => $metrics['avg_cycle_time'],
+      'last_cycle_time' => $metrics['last_cycle_time'],
+      'high_cycle_time' => $metrics['high_cycle_time'],
+      'low_cycle_time' => $metrics['low_cycle_time'],
+      'timeline' => $timeline
     ]);
   }
 
@@ -262,6 +245,7 @@ class ProductionMonitoringController extends Controller
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
     $newStatus = $request->status;
+    $nowIndonesia = now('Asia/Jakarta');
 
     // Close previous status log
     $lastLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
@@ -271,8 +255,8 @@ class ProductionMonitoringController extends Controller
 
     if ($lastLog) {
       $lastLog->update([
-        'end_time' => now(),
-        'duration_seconds' => now()->diffInSeconds($lastLog->start_time)
+        'end_time' => $nowIndonesia,
+        'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
       ]);
     }
 
@@ -280,14 +264,14 @@ class ProductionMonitoringController extends Controller
     \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::create([
       'monitoring_id' => $id,
       'status' => $newStatus,
-      'start_time' => now(),
-      'created_at' => now()
+      'start_time' => $nowIndonesia,
+      'created_at' => $nowIndonesia
     ]);
 
     // Update monitoring status
     $monitoring->update([
       'current_status' => $newStatus,
-      'updated_at' => now()
+      'updated_at' => $nowIndonesia
     ]);
 
     return response()->json([
@@ -300,13 +284,21 @@ class ProductionMonitoringController extends Controller
   {
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
-    $monitoring->increment('qty_ok', $request->qty ?? 1);
-    $monitoring->increment('qty_actual', $request->qty ?? 1);
+    $qty = $request->qty ?? 1;
+    $monitoring->increment('qty_ok', $qty);
+    $monitoring->increment('qty_actual', $qty);
+
+    // Record OK timestamp for cycle time calculation
+    OeeCalculationService::recordOkTimestamp($id);
+
+    // Get updated metrics
+    $metrics = OeeCalculationService::getRealtimeMetrics($id);
 
     return response()->json([
       'success' => true,
       'qty_ok' => $monitoring->qty_ok,
-      'qty_actual' => $monitoring->qty_actual
+      'qty_actual' => $monitoring->qty_actual,
+      'metrics' => $metrics
     ]);
   }
 
@@ -317,13 +309,15 @@ class ProductionMonitoringController extends Controller
       'downtime_reason' => 'required|string',
     ]);
 
+    $nowIndonesia = now('Asia/Jakarta');
+
     \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
       'monitoring_id' => $id,
       'downtime_type' => $request->downtime_type,
       'downtime_reason' => $request->downtime_reason,
-      'start_time' => now(),
+      'start_time' => $nowIndonesia,
       'notes' => $request->notes,
-      'created_at' => now()
+      'created_at' => $nowIndonesia
     ]);
 
     return response()->json([
@@ -341,32 +335,41 @@ class ProductionMonitoringController extends Controller
     ]);
 
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
+    $nowIndonesia = now('Asia/Jakarta');
+    $qty = $request->qty;
 
     \App\Modules\Production\Models\ProductionProcess\ProductionNg::create([
       'monitoring_id' => $id,
       'ng_type' => $request->ng_type,
       'ng_reason' => $request->ng_reason,
-      'qty' => $request->qty,
+      'qty' => $qty,
       'notes' => $request->notes,
-      'created_at' => now()
+      'created_at' => $nowIndonesia
     ]);
 
-    $monitoring->increment('qty_ng', $request->qty);
-    $monitoring->increment('qty_actual', $request->qty);
+    $monitoring->increment('qty_ng', $qty);
+    $monitoring->increment('qty_actual', $qty);
+
+    // Get updated metrics (Quality and Performance will change)
+    $metrics = OeeCalculationService::getRealtimeMetrics($id);
 
     return response()->json([
       'success' => true,
       'message' => 'NG recorded successfully',
       'qty_ng' => $monitoring->qty_ng,
-      'qty_actual' => $monitoring->qty_actual
+      'qty_actual' => $monitoring->qty_actual,
+      'metrics' => $metrics
     ]);
   }
 
   public function checkMqttNgSignal($id)
   {
-    $signal = Cache::pull("mqtt_ng_signal_{$id}");
+    $cacheKey = "mqtt_ng_signal_{$id}";
+    $signal = Cache::get($cacheKey);
 
     if ($signal) {
+      // Remove the signal after retrieving it
+      Cache::forget($cacheKey);
       return response()->json([
         'show' => $signal['show'] ?? false,
         'qty' => $signal['qty'] ?? 1
@@ -381,9 +384,12 @@ class ProductionMonitoringController extends Controller
 
   public function checkMqttDowntimeSignal($id)
   {
-    $signal = Cache::pull("mqtt_show_downtime_form_{$id}");
+    $cacheKey = "mqtt_show_downtime_form_{$id}";
+    $signal = Cache::get($cacheKey);
 
     if ($signal) {
+      // Remove the signal after retrieving it
+      Cache::forget($cacheKey);
       return response()->json([
         'show' => true
       ]);
@@ -396,9 +402,12 @@ class ProductionMonitoringController extends Controller
 
   public function checkMqttStatusSignal($id)
   {
-    $signal = Cache::pull("mqtt_status_signal_{$id}");
+    $cacheKey = "mqtt_status_signal_{$id}";
+    $signal = Cache::get($cacheKey);
 
     if ($signal) {
+      // Remove the signal after retrieving it
+      Cache::forget($cacheKey);
       return response()->json([
         'show' => true,
         'status' => $signal['status'] ?? null
