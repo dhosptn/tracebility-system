@@ -211,15 +211,32 @@ class ProductionMonitoringController extends Controller
     // Log metrics for debugging
     \Log::info("OEE Metrics for monitoring {$id}", $metrics);
 
-    // Prepare timeline data (Indonesia Timezone - WIB UTC+7)
+    // Prepare timeline data
     $timeline = $monitoring->statusLogs->map(function ($log) {
-      $indonesiaTime = $log->start_time->setTimezone('Asia/Jakarta');
-      return [
-        'time' => $indonesiaTime->format('H:i'),
+      $startTime = $log->start_time->format('H:i:s');
+      $endTime = $log->end_time ? $log->end_time->format('H:i:s') : null;
+      $duration = $log->duration_seconds ?? 0;
+
+      // Debug: Log raw data from database
+      \Log::info("Status Log", [
         'status' => $log->status,
-        'duration' => $log->duration_seconds ?? 0
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'duration_seconds' => $duration
+      ]);
+
+      return [
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'status' => $log->status,
+        'duration' => $duration
       ];
     });
+
+    // Log timeline for debugging
+    \Log::info("Timeline data for monitoring {$id}", [
+      'timeline' => $timeline->toArray()
+    ]);
 
     return response()->json([
       'wo_qty' => $monitoring->wo_qty,

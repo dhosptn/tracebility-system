@@ -22,11 +22,12 @@ class OeeCalculationService
     // Calculate Operating Time (only Running status)
     $operatingTime = self::calculateOperatingTime($monitoring);
 
-    // Calculate Planned Production Time (total time from start to now)
-    $plannedTime = now('Asia/Jakarta')->diffInSeconds($monitoring->start_time);
+    // Calculate Planned Production Time (total time from all status logs)
+    $plannedTime = self::calculatePlannedTime($monitoring);
 
-    // Calculate Availability
+    // Calculate Availability (Operating Time / Planned Time)
     $availability = $plannedTime > 0 ? ($operatingTime / $plannedTime * 100) : 0;
+    $availability = min($availability, 100); // Cap at 100%
 
     // Calculate Performance
     $performance = self::calculatePerformance($monitoring, $operatingTime);
@@ -55,6 +56,37 @@ class OeeCalculationService
   }
 
   /**
+   * Calculate Planned Production Time (total time from all status logs)
+   */
+  private static function calculatePlannedTime($monitoring)
+  {
+    $plannedTime = 0;
+    $now = now('Asia/Jakarta');
+
+    foreach ($monitoring->statusLogs as $log) {
+      if ($log->duration_seconds && $log->duration_seconds > 0) {
+        $plannedTime += $log->duration_seconds;
+      } else if ($log->end_time) {
+        $startTime = \Carbon\Carbon::parse($log->start_time);
+        $endTime = \Carbon\Carbon::parse($log->end_time);
+        $duration = $endTime->diffInSeconds($startTime, false);
+        if ($duration > 0) {
+          $plannedTime += $duration;
+        }
+      } else {
+        // Still ongoing - calculate from start to now
+        $startTime = \Carbon\Carbon::parse($log->start_time);
+        $duration = $now->diffInSeconds($startTime, false);
+        if ($duration > 0) {
+          $plannedTime += $duration;
+        }
+      }
+    }
+
+    return $plannedTime;
+  }
+
+  /**
    * Calculate Operating Time (only Running status)
    */
   private static function calculateOperatingTime($monitoring)
@@ -64,19 +96,18 @@ class OeeCalculationService
 
     foreach ($monitoring->statusLogs as $log) {
       if ($log->status === 'Running') {
-        // Convert start_time to Asia/Jakarta timezone
-        $startTime = \Carbon\Carbon::parse($log->start_time)->setTimezone('Asia/Jakarta');
-
         if ($log->duration_seconds && $log->duration_seconds > 0) {
           $operatingTime += $log->duration_seconds;
         } else if ($log->end_time) {
-          $endTime = \Carbon\Carbon::parse($log->end_time)->setTimezone('Asia/Jakarta');
+          $startTime = \Carbon\Carbon::parse($log->start_time);
+          $endTime = \Carbon\Carbon::parse($log->end_time);
           $duration = $endTime->diffInSeconds($startTime, false);
           if ($duration > 0) {
             $operatingTime += $duration;
           }
         } else {
           // Still running - calculate from start to now
+          $startTime = \Carbon\Carbon::parse($log->start_time);
           $duration = $now->diffInSeconds($startTime, false);
           if ($duration > 0) {
             $operatingTime += $duration;
@@ -91,6 +122,7 @@ class OeeCalculationService
   /**
    * Calculate Performance
    * Performance = (Ideal Cycle Time × (OK+NG)) / Operating Time
+   * Capped at 100% to avoid exceeding 100%
    */
   private static function calculatePerformance($monitoring, $operatingTime)
   {
@@ -106,7 +138,10 @@ class OeeCalculationService
     $idealCycleTime = $monitoring->cycle_time;
     $expectedTime = $idealCycleTime * $totalProduced;
 
-    return ($expectedTime / $operatingTime * 100);
+    $performance = ($expectedTime / $operatingTime * 100);
+
+    // Cap at 100% - can't exceed 100%
+    return min($performance, 100);
   }
 
   /**
@@ -193,19 +228,20 @@ class OeeCalculationService
     try {
       $metrics = self::calculateMetrics($monitoringId);
 
-      // Calculate Uptime (Operating Time / Planned Time)
-      $uptime = $metrics['planned_time'] > 0 ? ($metrics['operating_time'] / $metrics['planned_time'] * 100) : 0;
+      // Uptime = Availability (same calculation)
+      // Both represent Operating Time / Planned Time
+      $uptime = $metrics['availability'];
 
       $result = [
         'availability' => $metrics['availability'],
         'performance' => $metrics['performance'],
         'quality' => $metrics['quality'],
         'oee' => $metrics['oee'],
-        'uptime' => round($uptime, 1),
-        'avg_cycle_time' => $metrics['avg_cycle_time'],
-        'last_cycle_time' => $metrics['last_cycle_time'],
-        'high_cycle_time' => $metrics['high_cycle_time'],
-        'low_cycle_time' => $metrics['low_cycle_time'],
+        'uptime' => $uptime,
+        'avg_cycle_time' => round($metrics['avg_cycle_time'], 1),
+        'last_cycle_time' => round($metrics['last_cycle_time'], 1),
+        'high_cycle_time' => round($metrics['high_cycle_time'], 1),
+        'low_cycle_time' => round($metrics['low_cycle_time'], 1),
       ];
 
       \Log::info("OEE Service Result for monitoring {$monitoringId}", $result);
