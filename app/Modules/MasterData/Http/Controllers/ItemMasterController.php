@@ -9,7 +9,8 @@ use App\Modules\MasterData\Models\Uom;
 use App\Modules\MasterData\Models\ItemCategory;
 use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
-
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ItemMasterExport;
 
 class ItemMasterController extends  ControllersController
 {
@@ -64,6 +65,105 @@ class ItemMasterController extends  ControllersController
       ->rawColumns(['action'])
       ->make(true);
   }
+
+  public function export(Request $request)
+    {
+        // Apply filters if any
+        $query = ItemMaster::with(['uom', 'category'])
+            ->where('is_delete', 'N');
+
+        if ($request->has('stock_type') && $request->stock_type != '') {
+            $query->where('stock_type', $request->stock_type);
+        }
+
+        if ($request->has('category_id') && $request->category_id != '') {
+            $query->where('item_cat_id', $request->category_id);
+        }
+
+        $items = $query->get();
+
+        // Generate filename with timestamp
+        $filename = 'item_master_' . date('Ymd_His') . '.xlsx';
+
+        // Use the Export class
+        return Excel::download(new ItemMasterExport($items), $filename);
+    }
+
+    // Atau jika ingin menggunakan metode manual tanpa Export class:
+    public function exportManual(Request $request)
+    {
+        // Apply filters if any
+        $query = ItemMaster::with(['uom', 'category'])
+            ->where('is_delete', 'N');
+
+        if ($request->has('stock_type') && $request->stock_type != '') {
+            $query->where('stock_type', $request->stock_type);
+        }
+
+        if ($request->has('category_id') && $request->category_id != '') {
+            $query->where('item_cat_id', $request->category_id);
+        }
+
+        $items = $query->get();
+
+        // Generate filename with timestamp
+        $filename = 'item_master_' . date('Ymd_His') . '.csv';
+
+        // Create CSV headers
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        // Create callback function for streaming
+        $callback = function () use ($items) {
+            $file = fopen('php://output', 'w');
+            
+            // Add UTF-8 BOM for Excel compatibility
+            fwrite($file, "\xEF\xBB\xBF");
+            
+            // Add headers
+            fputcsv($file, [
+                'No',
+                'SKU / Part No',
+                'Part Name',
+                'Description',
+                'Model',
+                'Stock Type',
+                'UOM',
+                'Category',
+                'Standard Price',
+                'Barcode',
+                'Volume (m³)',
+                'Status',
+                'Created At'
+            ]);
+
+            // Add data rows
+            $no = 1;
+            foreach ($items as $item) {
+                fputcsv($file, [
+                    $no++,
+                    $item->item_number,
+                    $item->item_name,
+                    $item->item_description ?? '-',
+                    $item->model ?? '-',
+                    $item->stock_type == 'inventory' ? 'Inventory Item' : 'Non-Inventory Item',
+                    $item->uom ? $item->uom->uom_code : '-',
+                    $item->category ? $item->category->item_cat_name : '-',
+                    'Rp ' . number_format($item->standard_price, 0, ',', '.'),
+                    $item->barcode ?? '-',
+                    $item->volume_m3 ?? '-',
+                    $item->item_status,
+                    $item->input_date
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 
   public function create()
   {

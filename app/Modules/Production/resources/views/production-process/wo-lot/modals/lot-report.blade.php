@@ -202,10 +202,53 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <button type="button" class="btn btn-primary" onclick="printLotReport()">
                         <i class="fas fa-print"></i> Print
                     </button>
                 </div>
             </div>
         </div>
     </div>
+
+<script>
+    function printLotReport() {
+        var content = document.getElementById('report-content');
+        if (!content) return;
+
+        var win = window.open('', '_blank');
+        
+        var html = '<!DOCTYPE html><html><head><title>Control Lot Report</title>';
+        
+        // Copy styles
+        var styles = document.querySelectorAll('link[rel="stylesheet"], style');
+        styles.forEach(function(node) {
+            html += node.outerHTML;
+        });
+        
+        html += '<style>';
+        html += '@media print {';
+        html += '   @page { size: landscape; margin: 10mm; }';
+        html += '   body { -webkit-print-color-adjust: exact; margin: 0; }';
+        html += '   .report-container { width: 100% !important; min-width: 100% !important; margin: 0; padding: 0; box-shadow: none !important; }';
+        html += '   .col-md-6 { flex: 0 0 50% !important; max-width: 50% !important; }';
+        html += '}';
+        html += 'body { background-color: #fff; }';
+        html += '.report-container { width: 100% !important; min-width: 100% !important; box-shadow: none !important; }';
+        html += '.col-md-6 { flex: 0 0 50% !important; max-width: 50% !important; }';
+        html += '</style>';
+        
+        html += '</head><body>';
+        html += content.innerHTML;
+        
+        // Auto print
+        html += '<script>';
+        html += 'window.onload = function() { setTimeout(function() { window.print(); }, 1000); };';
+        html += '<' + '/script>';
+        
+        html += '</body></html>';
+        
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+    }
+</script>

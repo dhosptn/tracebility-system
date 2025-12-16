@@ -69,14 +69,14 @@ class OeeCalculationService
       } else if ($log->end_time) {
         $startTime = \Carbon\Carbon::parse($log->start_time);
         $endTime = \Carbon\Carbon::parse($log->end_time);
-        $duration = $endTime->diffInSeconds($startTime, false);
+        $duration = $startTime->diffInSeconds($endTime, false);
         if ($duration > 0) {
           $plannedTime += $duration;
         }
       } else {
         // Still ongoing - calculate from start to now
         $startTime = \Carbon\Carbon::parse($log->start_time);
-        $duration = $now->diffInSeconds($startTime, false);
+        $duration = $startTime->diffInSeconds($now, false);
         if ($duration > 0) {
           $plannedTime += $duration;
         }
@@ -101,14 +101,14 @@ class OeeCalculationService
         } else if ($log->end_time) {
           $startTime = \Carbon\Carbon::parse($log->start_time);
           $endTime = \Carbon\Carbon::parse($log->end_time);
-          $duration = $endTime->diffInSeconds($startTime, false);
+          $duration = $startTime->diffInSeconds($endTime, false);
           if ($duration > 0) {
             $operatingTime += $duration;
           }
         } else {
           // Still running - calculate from start to now
           $startTime = \Carbon\Carbon::parse($log->start_time);
-          $duration = $now->diffInSeconds($startTime, false);
+          $duration = $startTime->diffInSeconds($now, false);
           if ($duration > 0) {
             $operatingTime += $duration;
           }

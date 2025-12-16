@@ -130,6 +130,11 @@ class WoTransactionController extends Controller
 
     public function store(Request $request)
     {
+        // Handle Auto Save from TV Display (bypassing validation for manual input)
+        if ($request->has('monitoring_id')) {
+            return $this->autoSave($request);
+        }
+
         $request->validate([
             'trx_no' => 'required|unique:t_wo_transaction,trx_no',
             'wo_no' => 'required',
@@ -279,6 +284,77 @@ class WoTransactionController extends Controller
         $hours = floor($minutes / 60);
         $mins = $minutes % 60;
         return sprintf('%02d:%02d', $hours, $mins);
+    }
+
+    public function autoSave(Request $request)
+    {
+        try {
+            Log::info('Auto Save Triggered for Monitoring ID: ' . $request->monitoring_id);
+            
+            $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($request->monitoring_id);
+
+            // Check if transaction already exists for this WO and Process to prevent duplicates
+            // We check for transactions created today
+            $exists = WoTransaction::where('wo_no', $monitoring->wo_no)
+                ->where('process_id', $monitoring->process_id)
+                ->whereDate('trx_date', now()->toDateString())
+                ->exists();
+
+            if ($exists) {
+                 return response()->json(['success' => true, 'message' => 'Transaction already exists']);
+            }
+
+            DB::beginTransaction();
+
+            // Generate Auto Transaction Number
+            $today = date('Ymd');
+            $lastTrx = WoTransaction::where('trx_no', 'like', 'WX' . $today . '%')
+                ->orderBy('trx_no', 'desc')
+                ->first();
+
+            $newSequence = $lastTrx ? intval(substr($lastTrx->trx_no, -4)) + 1 : 1;
+            $trxNo = 'WX' . $today . sprintf('%04d', $newSequence);
+
+            // Get Work Order details
+            $wo = WorkOrder::where('wo_no', $monitoring->wo_no)->first();
+
+            $transaction = WoTransaction::create([
+                'trx_no' => $trxNo,
+                'trx_date' => now()->toDateString(),
+                'wo_id' => $wo ? $wo->wo_id : null,
+                'wo_no' => $monitoring->wo_no,
+                'process_id' => $monitoring->process_id,
+                'process_name' => $monitoring->process_name,
+                'cycle_time' => $monitoring->cycle_time,
+                'supervisor' => $monitoring->supervisor,
+                'operator' => $monitoring->operator,
+                'machine_id' => $monitoring->machine_id,
+                'shift_id' => $monitoring->shift_id,
+                'start_time' => $monitoring->start_time,
+                'end_time' => now(),
+                'target_qty' => $monitoring->wo_qty,
+                'actual_qty' => $monitoring->qty_actual,
+                'ok_qty' => $monitoring->qty_ok,
+                'ng_qty' => $monitoring->qty_ng,
+                'status' => 'Draft',
+                'notes' => 'Auto-generated from TV Display',
+                'input_by' => 'System',
+                'input_time' => now(),
+                'is_delete' => 'N'
+            ]);
+
+            DB::commit();
+            return response()->json([
+                'success' => true, 
+                'message' => 'Transaction auto-saved successfully', 
+                'trx_no' => $trxNo
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Auto Save Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 
     // AJAX to get WO details
