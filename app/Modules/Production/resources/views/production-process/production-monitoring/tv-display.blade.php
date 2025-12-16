@@ -173,14 +173,7 @@
 
             <!-- Bottom Cards Row -->
             <div class="flex gap-2 h-28">
-                <!-- Estimated Finish -->
-                <div
-                    class="flex-1 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-2xl p-2 flex flex-col justify-center">
-                    <div class="text-base font-bold text-white tracking-wide mb-1 text-center">EST. FINISH</div>
-                    <div id="finishTime" class="text-xl font-bold text-white text-center font-mono leading-none">Calculating...</div>
-                </div>
-
-                <!-- Machine Status -->
+                 <!-- Machine Status -->
                 <div
                     class="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg shadow-2xl border border-slate-700/50 p-2 flex flex-col justify-center">
                     <div class="text-base font-bold text-cyan-400 tracking-wide mb-1 text-center">STATUS</div>
@@ -191,6 +184,12 @@
                         </div>
                     </div>
                 </div>
+                <!-- Estimated Finish -->
+                <div
+                    class="flex-1 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-2xl p-2 flex flex-col justify-center">
+                    <div class="text-base font-bold text-white tracking-wide mb-1 text-center">EST. FINISH</div>
+                    <div id="finishTime" class="text-xl font-bold text-white text-center font-mono leading-none">Calculating...</div>
+                </div>
             </div>
         </div>
 
@@ -198,70 +197,70 @@
         <div class="flex-1 flex flex-col gap-2 min-h-0 overflow-hidden">
             <!-- KPI Cards Row -->
             <div class="grid grid-cols-4 gap-3 h-32">
-                @php
-                    $kpiCards = [
-                        [
-                            'id' => 'targetQty',
-                            'title' => 'TARGET QTY',
-                            'value' => $monitoring->wo_qty,
-                            'unit' => 'PCS',
-                            'color' => 'blue',
-                            'border' => 'border-blue-500',
-                            'text' => 'text-blue-400'
-                        ],
-                        [
-                            'id' => 'actualQty',
-                            'title' => 'ACTUAL QTY',
-                            'value' => $monitoring->qty_actual,
-                            'unit' => 'PCS',
-                            'color' => 'green',
-                            'border' => 'border-green-500',
-                            'text' => 'text-green-400'
-                        ],
-                        [
-                            'id' => 'ngQty',
-                            'title' => 'NG QTY',
-                            'value' => $monitoring->qty_ng,
-                            'unit' => 'PCS',
-                            'color' => 'red',
-                            'border' => 'border-red-500',
-                            'text' => 'text-red-400'
-                        ],
-                        [
-                            'id' => 'progressPercent',
-                            'title' => 'PROGRESS',
-                            'value' =>
-                                $monitoring->wo_qty > 0
-                                    ? number_format(($monitoring->qty_ok / $monitoring->wo_qty) * 100, 1, '.', '') . '%'
-                                    : '0%',
-                            'unit' => '',
-                            'color' => 'amber',
-                            'border' => 'border-amber-500',
-                            'text' => 'text-amber-400'
-                        ],
-                    ];
-                @endphp
+    @php
+        $kpiCards = [
+            [
+                'id' => 'targetQty',
+                'title' => 'TARGET QTY',
+                'value' => $monitoring->wo_qty,
+                'unit' => 'PCS',
+                'color' => 'blue',
+                'border' => 'border-blue-500',
+                'text' => 'text-blue-300'  // Changed from text-blue-400 to text-blue-300
+            ],
+            [
+                'id' => 'actualQty',
+                'title' => 'ACTUAL QTY',
+                'value' => $monitoring->qty_actual,
+                'unit' => 'PCS',
+                'color' => 'green',
+                'border' => 'border-green-500',
+                'text' => 'text-emerald-300'  // Changed to emerald-300 for brighter green
+            ],
+            [
+                'id' => 'ngQty',
+                'title' => 'NG QTY',
+                'value' => $monitoring->qty_ng,
+                'unit' => 'PCS',
+                'color' => 'red',
+                'border' => 'border-red-500',
+                'text' => 'text-rose-300'  // Changed to rose-300 for brighter red
+            ],
+            [
+                'id' => 'progressPercent',
+                'title' => 'PROGRESS',
+                'value' =>
+                    $monitoring->wo_qty > 0
+                        ? number_format(($monitoring->qty_ok / $monitoring->wo_qty) * 100, 1, '.', '') . '%'
+                        : '0%',
+                'unit' => '',
+                'color' => 'amber',
+                'border' => 'border-amber-500',
+                'text' => 'text-amber-300'  // Changed from text-amber-400 to text-amber-300
+            ],
+        ];
+    @endphp
 
-                @foreach ($kpiCards as $card)
-                    <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-t-4 {{ $card['border'] }} relative overflow-hidden group hover:from-slate-700 hover:to-slate-700/80 transition-all duration-300">
-                        <div class="flex justify-between items-start">
-                            <div class="text-base font-bold text-slate-400 tracking-widest uppercase">{{ $card['title'] }}</div>
-                            @if(!empty($card['unit']))
-                                <div class="text-[15px] font-bold text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded">{{ $card['unit'] }}</div>
-                            @endif
-                        </div>
-                        
-                        <div class="flex-1 flex items-end justify-end">
-                            <div id="{{ $card['id'] }}" class="text-5xl font-black {{ $card['text'] }} tracking-tighter drop-shadow-lg leading-none font-mono">
-                                {{ $card['value'] }}
-                            </div>
-                        </div>
-                        
-                        <!-- Decorative background glow -->
-                        <div class="absolute -bottom-6 -left-6 w-24 h-24 bg-{{ $card['color'] }}-500/10 rounded-full blur-2xl group-hover:bg-{{ $card['color'] }}-500/20 transition-all duration-500"></div>
-                    </div>
-                @endforeach
+    @foreach ($kpiCards as $card)
+        <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-t-4 {{ $card['border'] }} relative overflow-hidden group hover:from-slate-700 hover:to-slate-700/80 transition-all duration-300">
+            <div class="flex justify-between items-start">
+                <div class="text-base text-slate-200 tracking-tighter shadow-black drop-shadow-lg font-mono uppercase">{{ $card['title'] }}</div>
+                @if(!empty($card['unit']))
+                    <div class="text-[15px] font-bold text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">{{ $card['unit'] }}</div>
+                @endif
             </div>
+            
+            <div class="flex-1 flex items-end justify-end">
+                <div id="{{ $card['id'] }}" class="text-5xl font-black {{ $card['text'] }} tracking-tighter drop-shadow-lg leading-none font-mono text-shadow-lg">
+                    {{ $card['value'] }}
+                </div>
+            </div>
+            
+            <!-- Decorative background glow -->
+            <div class="absolute -bottom-6 -left-6 w-24 h-24 bg-{{ $card['color'] }}-500/10 rounded-full blur-2xl group-hover:bg-{{ $card['color'] }}-500/20 transition-all duration-500"></div>
+        </div>
+    @endforeach
+</div>
 
             <!-- Cycle Time Section -->
             <div class="grid grid-cols-4 gap-3 h-40 mb-2">
@@ -360,7 +359,7 @@
 
     @foreach ($smallCards as $card)
         <div class="col-span-1 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-xl p-2 flex flex-col items-center justify-center border border-slate-600/30">
-            <div class="text-lg font-bold text-slate-400 mb-1 tracking-wider text-center w-full uppercase">
+            <div class="text-[15px] font-bold text-slate-400 mb-1 tracking-wider text-center w-full uppercase">
                 {{ $card['title'] }}
             </div>
             <div id="{{ $card['id'] }}" class="text-xl md:text-2xl font-black text-{{ $card['color'] }}-400 mb-0.5 leading-none font-mono">
