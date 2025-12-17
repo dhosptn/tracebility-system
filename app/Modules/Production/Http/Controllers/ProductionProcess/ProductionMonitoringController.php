@@ -438,6 +438,19 @@ class ProductionMonitoringController extends Controller
   }
 
   /**
+   * Get current status for production monitoring (for Current Time display)
+   */
+  public function getCurrentStatus($id)
+  {
+    $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
+
+    return response()->json([
+      'success' => true,
+      'current_status' => $monitoring->current_status
+    ]);
+  }
+
+  /**
    * Get accumulated running time for production monitoring
    */
   public function getRunningTime($id)

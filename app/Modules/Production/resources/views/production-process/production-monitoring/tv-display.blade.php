@@ -554,8 +554,23 @@
         window.monitoringId = {{ $monitoring->monitoring_id }};
         window.machineCode = '{{ $monitoring->machine->machine_code ?? 'N/A' }}';
     </script>
-    <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
-    <script src="{{ asset('js/mqtt-control-panel.js') }}?v={{ time() }}"></script>
+    <script>
+        // Load tv-display.js if exists
+        const tvDisplayScript = document.createElement('script');
+        tvDisplayScript.src = "{{ asset('js/tv-display.js') }}?v={{ time() }}";
+        tvDisplayScript.onerror = function() {
+            console.warn('tv-display.js not found, using inline implementation');
+        };
+        document.head.appendChild(tvDisplayScript);
+
+        // Load mqtt-production-handler.js if exists
+        const mqttScript = document.createElement('script');
+        mqttScript.src = "{{ asset('js/mqtt-production-handler.js') }}?v={{ time() }}";
+        mqttScript.onerror = function() {
+            console.warn('mqtt-production-handler.js not found, MQTT features disabled');
+        };
+        document.head.appendChild(mqttScript);
+    </script>
     <script>
         // Initialize TV Display with monitoring data
         $(document).ready(function() {
@@ -569,10 +584,9 @@
                 });
             }
 
-            // Timer state management
+            // Timer state management - CURRENT STATUS DURATION ONLY
             let currentStatus = '{{ $monitoring->current_status }}';
-            let baseAccumulatedSeconds = 0; // Base accumulated time from server
-            let runningStartTime = null; // When current Running period started
+            let currentStatusStartTime = null; // When current status started
             let lastServerSync = 0; // Last time we synced with server
 
             // Update clock and timer every second
@@ -595,38 +609,30 @@
                 document.getElementById('clock').textContent = timeString;
                 document.getElementById('date').textContent = dateString;
 
-                // Update production timer
-                updateProductionTimer();
+                // Update current status timer
+                updateCurrentStatusTimer();
             }
 
-            function updateProductionTimer() {
-                let displaySeconds = baseAccumulatedSeconds;
+            function updateCurrentStatusTimer() {
+                let displaySeconds = 0;
 
-                // If status is Running, add current running time
-                if (currentStatus === 'Running' && runningStartTime) {
+                // Calculate duration of CURRENT STATUS ONLY
+                if (currentStatusStartTime) {
                     const now = Date.now();
-                    const currentRunningSeconds = Math.floor((now - runningStartTime) / 1000);
-                    displaySeconds += currentRunningSeconds;
+                    const currentStatusDuration = Math.floor((now - currentStatusStartTime) / 1000);
+                    displaySeconds = Math.max(0, currentStatusDuration);
                 }
 
-                // Ensure non-negative
-                displaySeconds = Math.max(0, displaySeconds);
-
-                // Convert to HH:MM:SS with proper floor
+                // Convert to HH:MM:SS
                 const totalSeconds = Math.floor(displaySeconds);
                 const hours = Math.floor(totalSeconds / 3600);
                 const minutes = Math.floor((totalSeconds % 3600) / 60);
                 const seconds = Math.floor(totalSeconds % 60);
 
-                // Ensure all values are non-negative
-                const displayHours = Math.max(0, hours);
-                const displayMinutes = Math.max(0, minutes);
-                const displaySeconds_final = Math.max(0, seconds);
-
                 const timerString =
-                    String(displayHours).padStart(2, '0') + ':' +
-                    String(displayMinutes).padStart(2, '0') + ':' +
-                    String(displaySeconds_final).padStart(2, '0');
+                    String(hours).padStart(2, '0') + ':' +
+                    String(minutes).padStart(2, '0') + ':' +
+                    String(seconds).padStart(2, '0');
 
                 document.getElementById('currentTimer').textContent = timerString;
 
@@ -682,127 +688,162 @@
             // Expose checkProductionFinish to global scope for tv-display.js
             window.checkProductionFinish = checkProductionFinish;
 
-            // Sync timer with server every 2 seconds to detect MQTT changes
-            function syncTimerWithServer() {
+            // Update status badge display
+            function updateStatusBadge(status) {
+                const statusBadge = document.getElementById('statusBadge');
+                if (!statusBadge) return;
+
+                // Remove all status classes
+                statusBadge.className = 'px-3 py-1.5 rounded-lg shadow-xl';
+
+                // Add appropriate classes based on status
+                switch (status) {
+                    case 'Running':
+                        statusBadge.classList.add('bg-gradient-to-r', 'from-green-500', 'to-emerald-400');
+                        statusBadge.innerHTML =
+                            '<div class="text-lg font-black text-white tracking-widest">RUN</div>';
+                        break;
+                    case 'Ready':
+                        statusBadge.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-400');
+                        statusBadge.innerHTML =
+                            '<div class="text-lg font-black text-white tracking-widest">READY</div>';
+                        break;
+                    case 'Downtime':
+                        statusBadge.classList.add('bg-gradient-to-r', 'from-red-500', 'to-red-400');
+                        statusBadge.innerHTML =
+                            '<div class="text-lg font-black text-white tracking-widest">DOWN</div>';
+                        break;
+                    case 'Stop':
+                        statusBadge.classList.add('bg-gradient-to-r', 'from-gray-500', 'to-gray-400');
+                        statusBadge.innerHTML =
+                            '<div class="text-lg font-black text-white tracking-widest">STOP</div>';
+                        break;
+                    default:
+                        statusBadge.classList.add('bg-gradient-to-r', 'from-gray-500', 'to-gray-400');
+                        statusBadge.innerHTML = '<div class="text-lg font-black text-white tracking-widest">' +
+                            status.toUpperCase() + '</div>';
+                }
+            }
+
+            // Sync status with server every 1 second for faster detection
+            function syncStatusWithServer() {
                 const now = Date.now();
-                // Sync every 2 seconds to quickly detect MQTT status changes
-                if (now - lastServerSync < 2000) {
+                // Sync every 1 second for faster detection
+                if (now - lastServerSync < 1000) {
                     return;
                 }
 
-                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-running-time`)
+                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-current-status`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
                             lastServerSync = now;
                             const previousStatus = currentStatus;
-                            const previousAccumulated = baseAccumulatedSeconds;
+                            const newStatus = data.current_status || 'Ready';
 
-                            baseAccumulatedSeconds = data.accumulated_seconds || 0;
-                            currentStatus = data.current_status || 'Ready';
+                            // If status changed, RESET timer IMMEDIATELY
+                            if (previousStatus !== newStatus) {
+                                console.log('Status changed from', previousStatus, 'to', newStatus);
 
-                            // If status changed, handle it
-                            if (previousStatus !== currentStatus) {
-                                console.log('Status changed from', previousStatus, 'to', currentStatus);
+                                // IMMEDIATE RESET: New status starts timer from 00:00:00
+                                currentStatus = newStatus;
+                                currentStatusStartTime = now;
 
-                                // If status changed to Running, reset running start time
-                                if (currentStatus === 'Running' && previousStatus !== 'Running') {
-                                    runningStartTime = now;
-                                    console.log('Running started via MQTT');
-                                }
+                                // Force immediate display update to 00:00:00
+                                document.getElementById('currentTimer').textContent = '00:00:00';
 
-                                // If status changed from Running, stop the timer
-                                if (previousStatus === 'Running' && currentStatus !== 'Running') {
-                                    runningStartTime = null;
-                                    console.log('Running stopped via MQTT');
-                                }
+                                console.log('Timer IMMEDIATELY RESET for new status:', newStatus);
+
+                                // Update status badge
+                                updateStatusBadge(newStatus);
                             }
 
-                            console.log('Timer synced:', data.formatted_time, 'Status:', currentStatus);
-                            updateProductionTimer(); // Update display after sync
+                            console.log('Status synced:', currentStatus);
+                            updateCurrentStatusTimer(); // Update display after sync
                         }
                     })
-                    .catch(error => console.error('Error syncing timer:', error));
+                    .catch(error => console.error('Error syncing status:', error));
             }
 
-            // Function to update status and timer state
+            // Function to update status - RESETS timer for new status
             window.updateTimerStatus = function(newStatus) {
                 const now = Date.now();
 
-                // If changing to Running, record the start time and fetch from server
-                if (newStatus === 'Running' && currentStatus !== 'Running') {
-                    // Fetch latest accumulated time from server
-                    fetch(
-                            `/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-running-time`
-                        )
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                baseAccumulatedSeconds = data.accumulated_seconds || 0;
-                                runningStartTime = now;
-                                lastServerSync = now;
-                                console.log('Timer started. Base:', data.formatted_time);
-                                updateProductionTimer(); // Update display immediately
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error fetching timer on status change:', error);
-                            runningStartTime = now;
-                            updateProductionTimer();
-                        });
-                }
+                // If status is changing, RESET timer to 00:00:00 for new status
+                if (currentStatus !== newStatus) {
+                    console.log('Status changing from', currentStatus, 'to', newStatus);
 
-                // If changing from Running to another status, stop the timer
-                if (currentStatus === 'Running' && newStatus !== 'Running') {
-                    if (runningStartTime) {
-                        const runningDuration = Math.floor((now - runningStartTime) / 1000);
-                        baseAccumulatedSeconds += runningDuration;
-                        runningStartTime = null;
-                        console.log('Timer paused. Accumulated:', baseAccumulatedSeconds, 'seconds');
-                        updateProductionTimer(); // Update display immediately
-                    }
-                }
+                    // IMMEDIATE RESET: New status starts timer from 00:00:00
+                    currentStatus = newStatus;
+                    currentStatusStartTime = now;
 
-                currentStatus = newStatus;
+                    // Force immediate display update to 00:00:00
+                    document.getElementById('currentTimer').textContent = '00:00:00';
+
+                    console.log('Timer IMMEDIATELY RESET for new status:', newStatus);
+
+                    // Update status badge
+                    updateStatusBadge(newStatus);
+
+                    updateCurrentStatusTimer(); // Update display immediately
+                }
             };
 
-            // Fetch accumulated running time from server on load
-            function fetchAccumulatedTime() {
-                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-running-time`)
+            // Force reset timer to 00:00:00 immediately
+            function forceResetTimer() {
+                document.getElementById('currentTimer').textContent = '00:00:00';
+                currentStatusStartTime = Date.now();
+                console.log('Timer force reset to 00:00:00');
+            }
+
+            // Expose forceResetTimer to global scope for external calls
+            window.forceResetTimer = forceResetTimer;
+
+            // Fetch current status and start timer for current status
+            function fetchCurrentStatus() {
+                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-current-status`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            baseAccumulatedSeconds = data.accumulated_seconds || 0;
                             currentStatus = data.current_status || 'Ready';
 
-                            if (currentStatus === 'Running') {
-                                runningStartTime = Date.now();
-                            }
-
+                            // Start timer for current status from now
+                            currentStatusStartTime = Date.now();
                             lastServerSync = Date.now();
-                            console.log('Loaded - Status:', currentStatus, 'Accumulated:', data.formatted_time);
-                            updateProductionTimer(); // Update display immediately
+
+                            console.log('Loaded - Current Status:', currentStatus,
+                                'Timer started from 00:00:00');
+
+                            // Update status badge
+                            updateStatusBadge(currentStatus);
+                            updateCurrentStatusTimer(); // Update display immediately
                         }
                     })
                     .catch(error => {
-                        console.error('Error fetching accumulated time:', error);
-                        // Fallback: if Running, start timer from now
-                        if (currentStatus === 'Running') {
-                            runningStartTime = Date.now();
-                        }
-                        updateProductionTimer(); // Update display even on error
+                        console.error('Error fetching current status:', error);
+                        // Fallback: start timer from now
+                        currentStatusStartTime = Date.now();
+                        updateCurrentStatusTimer(); // Update display even on error
                     });
             }
 
+            // Initialize MQTT handler if available
+            let mqttHandler = null;
+            if (typeof MqttProductionHandler !== 'undefined') {
+                mqttHandler = new MqttProductionHandler({{ $monitoring->monitoring_id }});
+                mqttHandler.start();
+                console.log('MQTT handler initialized for timer reset support');
+            }
+
             // Initialize timer
-            fetchAccumulatedTime();
+            fetchCurrentStatus();
 
             // Update display every second
             setInterval(updateClockAndTimer, 1000);
             updateClockAndTimer();
 
-            // Sync with server every 2 seconds to quickly detect MQTT changes
-            setInterval(syncTimerWithServer, 2000);
+            // Sync with server every 1 second to quickly detect MQTT changes
+            setInterval(syncStatusWithServer, 1000);
 
             // Adjust layout for timeline
             function adjustTimelineLayout() {

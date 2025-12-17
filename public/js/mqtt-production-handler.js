@@ -9,6 +9,7 @@ class MqttProductionHandler {
     this.pollingInterval = 2000; // 2 seconds
     this.intervalId = null;
     this.isPolling = false;
+    this.lastStatus = null; // Track last status for change detection
   }
 
   /**
@@ -113,28 +114,42 @@ class MqttProductionHandler {
    */
   updateStatus(data) {
     const statusElement = document.getElementById('current-status');
-    if (!statusElement) return;
-
     const status = data.current_status || 'Unknown';
-    statusElement.textContent = status;
+    
+    // Check if status changed and trigger timer reset
+    if (this.lastStatus && this.lastStatus !== status) {
+      console.log('Status changed via MQTT from', this.lastStatus, 'to', status);
+      
+      // IMMEDIATELY reset timer for new status
+      if (typeof window.updateTimerStatus === 'function') {
+        window.updateTimerStatus(status);
+      }
+    }
+    
+    // Store current status for next comparison
+    this.lastStatus = status;
 
-    // Update status badge color
-    statusElement.className = 'badge';
-    switch (status) {
-      case 'Ready':
-        statusElement.classList.add('badge-info');
-        break;
-      case 'Running':
-        statusElement.classList.add('badge-success');
-        break;
-      case 'Downtime':
-        statusElement.classList.add('badge-danger');
-        break;
-      case 'Stop':
-        statusElement.classList.add('badge-secondary');
-        break;
-      default:
-        statusElement.classList.add('badge-light');
+    if (statusElement) {
+      statusElement.textContent = status;
+
+      // Update status badge color
+      statusElement.className = 'badge';
+      switch (status) {
+        case 'Ready':
+          statusElement.classList.add('badge-info');
+          break;
+        case 'Running':
+          statusElement.classList.add('badge-success');
+          break;
+        case 'Downtime':
+          statusElement.classList.add('badge-danger');
+          break;
+        case 'Stop':
+          statusElement.classList.add('badge-secondary');
+          break;
+        default:
+          statusElement.classList.add('badge-light');
+      }
     }
   }
 
@@ -351,6 +366,16 @@ class MqttProductionHandler {
 
       const data = await response.json();
       console.log('Status updated:', data);
+      
+      // IMMEDIATELY reset timer for new status
+      if (typeof window.updateTimerStatus === 'function') {
+        window.updateTimerStatus(status);
+      }
+      
+      // Also force reset timer if function exists
+      if (typeof window.forceResetTimer === 'function') {
+        window.forceResetTimer();
+      }
       
       // Immediately update display
       this.poll();
