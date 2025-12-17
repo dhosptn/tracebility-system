@@ -555,6 +555,7 @@
         window.machineCode = '{{ $monitoring->machine->machine_code ?? 'N/A' }}';
     </script>
     <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
+    <script src="{{ asset('js/mqtt-control-panel.js') }}?v={{ time() }}"></script>
     <script>
         // Initialize TV Display with monitoring data
         $(document).ready(function() {
@@ -596,16 +597,6 @@
 
                 // Update production timer
                 updateProductionTimer();
-            }
-
-            // Helper function to format seconds to HH:MM:SS
-            function formatTimeFromSeconds(totalSeconds) {
-                const hours = Math.floor(totalSeconds / 3600);
-                const minutes = Math.floor((totalSeconds % 3600) / 60);
-                const seconds = Math.floor(totalSeconds % 60);
-                return String(hours).padStart(2, '0') + ':' +
-                    String(minutes).padStart(2, '0') + ':' +
-                    String(seconds).padStart(2, '0');
             }
 
             function updateProductionTimer() {
@@ -665,27 +656,15 @@
                         currentTimerLabel.classList.remove('text-white');
                     }
 
-                    // Stop timer if still running - save accumulated time
+                    // Stop timer if still running
                     if (currentStatus === 'Running') {
-                        const now = Date.now();
-                        if (runningStartTime) {
-                            const runningDuration = Math.floor((now - runningStartTime) / 1000);
-                            baseAccumulatedSeconds += runningDuration;
-                        }
                         runningStartTime = null;
-                        console.log('Production finished! Qty reached target. Final time:', baseAccumulatedSeconds,
-                            'seconds');
+                        console.log('Production finished! Qty reached target.');
                     }
 
                     // Change background color to green
                     currentTimerElement.parentElement.classList.remove('from-blue-600', 'to-blue-700');
                     currentTimerElement.parentElement.classList.add('from-green-600', 'to-green-700');
-
-                    // Auto-change status to Ready if still Running
-                    if (currentStatus === 'Running') {
-                        console.log('Auto-changing status to Ready');
-                        updateTimerStatus('Ready');
-                    }
                 } else {
                     // Reset to CURRENT TIME if not finished
                     if (currentTimerLabel && currentTimerLabel.textContent === 'FINISH') {
@@ -719,19 +698,12 @@
                             const previousStatus = currentStatus;
                             const previousAccumulated = baseAccumulatedSeconds;
 
-                            // Use the maximum of server time and local accumulated time
-                            // This ensures we don't lose time accumulated on frontend
-                            const serverAccumulated = data.accumulated_seconds || 0;
-                            baseAccumulatedSeconds = Math.max(baseAccumulatedSeconds, serverAccumulated);
-
+                            baseAccumulatedSeconds = data.accumulated_seconds || 0;
                             currentStatus = data.current_status || 'Ready';
 
                             // If status changed, handle it
                             if (previousStatus !== currentStatus) {
                                 console.log('Status changed from', previousStatus, 'to', currentStatus);
-
-                                // Update status badge
-                                updateStatusBadge(currentStatus);
 
                                 // If status changed to Running, reset running start time
                                 if (currentStatus === 'Running' && previousStatus !== 'Running') {
@@ -753,51 +725,6 @@
                     .catch(error => console.error('Error syncing timer:', error));
             }
 
-            // Function to update status badge
-            function updateStatusBadge(status) {
-                const statusBadge = document.getElementById('statusBadge');
-                if (!statusBadge) return;
-
-                // Remove all existing classes
-                statusBadge.className = 'bg-gradient-to-r px-3 py-1.5 rounded-lg shadow-xl';
-
-                // Normalize status for comparison
-                const normalizedStatus = String(status).trim().toLowerCase();
-
-                // Add status-specific classes
-                const statusConfig = {
-                    'running': {
-                        gradient: 'from-green-500 to-emerald-400',
-                        text: 'RUN'
-                    },
-                    'stopped': {
-                        gradient: 'from-gray-600 to-slate-700',
-                        text: 'STOP'
-                    },
-                    'stop': {
-                        gradient: 'from-gray-600 to-slate-700',
-                        text: 'STOP'
-                    },
-                    'ready': {
-                        gradient: 'from-blue-500 to-cyan-400',
-                        text: 'READY'
-                    },
-                    'downtime': {
-                        gradient: 'from-red-500 to-rose-400',
-                        text: 'DOWNTIME'
-                    },
-                    'paused': {
-                        gradient: 'from-blue-500 to-blue-600',
-                        text: 'PAUSED'
-                    }
-                };
-
-                const config = statusConfig[normalizedStatus] || statusConfig['ready'];
-                statusBadge.classList.add(config.gradient);
-                statusBadge.innerHTML =
-                    `<div class="text-lg font-black text-white tracking-widest">${config.text}</div>`;
-            }
-
             // Function to update status and timer state
             window.updateTimerStatus = function(newStatus) {
                 const now = Date.now();
@@ -811,22 +738,15 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                // Use the maximum of server time and local accumulated time
-                                // This ensures we don't lose time if frontend has more accumulated
-                                const serverAccumulated = data.accumulated_seconds || 0;
-                                baseAccumulatedSeconds = Math.max(baseAccumulatedSeconds,
-                                    serverAccumulated);
-
+                                baseAccumulatedSeconds = data.accumulated_seconds || 0;
                                 runningStartTime = now;
                                 lastServerSync = now;
-                                console.log('Timer started. Base:', data.formatted_time,
-                                    'Local accumulated:', baseAccumulatedSeconds);
+                                console.log('Timer started. Base:', data.formatted_time);
                                 updateProductionTimer(); // Update display immediately
                             }
                         })
                         .catch(error => {
                             console.error('Error fetching timer on status change:', error);
-                            // Keep local accumulated time, just start running
                             runningStartTime = now;
                             updateProductionTimer();
                         });
@@ -838,49 +758,13 @@
                         const runningDuration = Math.floor((now - runningStartTime) / 1000);
                         baseAccumulatedSeconds += runningDuration;
                         runningStartTime = null;
-                        console.log('Timer paused. Running duration:', runningDuration, 'seconds');
-                        console.log('Total accumulated:', baseAccumulatedSeconds, 'seconds');
-                        console.log('Formatted time:', formatTimeFromSeconds(baseAccumulatedSeconds));
+                        console.log('Timer paused. Accumulated:', baseAccumulatedSeconds, 'seconds');
                         updateProductionTimer(); // Update display immediately
-                    } else {
-                        // Even if runningStartTime is null, still update display with baseAccumulatedSeconds
-                        console.log('Timer already stopped. Current accumulated:', baseAccumulatedSeconds,
-                            'seconds');
-                        updateProductionTimer();
                     }
                 }
 
                 currentStatus = newStatus;
-                updateStatusBadge(newStatus); // Update status badge
-                console.log('Status updated to:', newStatus);
-
-                // Send status update to backend to save to database
-                sendStatusUpdateToBackend(newStatus);
             };
-
-            // Send status update to backend
-            function sendStatusUpdateToBackend(status) {
-                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/update-status`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
-                                'content')
-                        },
-                        body: JSON.stringify({
-                            status: status
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            console.log('Status saved to backend:', status);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error saving status to backend:', error);
-                    });
-            }
 
             // Fetch accumulated running time from server on load
             function fetchAccumulatedTime() {
@@ -890,9 +774,6 @@
                         if (data.success) {
                             baseAccumulatedSeconds = data.accumulated_seconds || 0;
                             currentStatus = data.current_status || 'Ready';
-
-                            // Update status badge on load
-                            updateStatusBadge(currentStatus);
 
                             if (currentStatus === 'Running') {
                                 runningStartTime = Date.now();

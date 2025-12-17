@@ -271,22 +271,9 @@ class ProductionMonitoringController extends Controller
       ->first();
 
     if ($lastLog) {
-      $durationSeconds = $nowIndonesia->diffInSeconds($lastLog->start_time);
       $lastLog->update([
         'end_time' => $nowIndonesia,
-        'duration_seconds' => $durationSeconds
-      ]);
-
-      \Log::info("Status log closed", [
-        'monitoring_id' => $id,
-        'previous_status' => $lastLog->status,
-        'start_time' => $lastLog->start_time->toIso8601String(),
-        'end_time' => $nowIndonesia->toIso8601String(),
-        'duration_seconds' => $durationSeconds
-      ]);
-    } else {
-      \Log::warning("No open status log found to close", [
-        'monitoring_id' => $id
+        'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
       ]);
     }
 
@@ -302,12 +289,6 @@ class ProductionMonitoringController extends Controller
     $monitoring->update([
       'current_status' => $newStatus,
       'updated_at' => $nowIndonesia
-    ]);
-
-    \Log::info("Status updated", [
-      'monitoring_id' => $id,
-      'new_status' => $newStatus,
-      'timestamp' => $nowIndonesia->toIso8601String()
     ]);
 
     return response()->json([
@@ -464,39 +445,18 @@ class ProductionMonitoringController extends Controller
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
     // Calculate total running time from status logs
-    // Get all Running status logs (both completed and ongoing)
     $runningLogs = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
       ->where('status', 'Running')
       ->orderBy('start_time', 'asc')
       ->get();
 
-    \Log::info("Query Running logs for monitoring {$id}", [
-      'count' => $runningLogs->count(),
-      'logs' => $runningLogs->map(function ($log) {
-        return [
-          'log_id' => $log->log_id,
-          'status' => $log->status,
-          'start_time' => $log->start_time->toIso8601String(),
-          'end_time' => $log->end_time ? $log->end_time->toIso8601String() : 'NULL',
-          'duration_seconds' => $log->duration_seconds
-        ];
-      })->toArray()
-    ]);
-
     $totalRunningSeconds = 0;
 
     foreach ($runningLogs as $log) {
-      if ($log->end_time && $log->duration_seconds !== null) {
-        // Completed running period - use stored duration_seconds
-        $totalRunningSeconds += $log->duration_seconds;
-
-        \Log::info("Completed running period", [
-          'start_time' => $log->start_time->toIso8601String(),
-          'end_time' => $log->end_time->toIso8601String(),
-          'duration_seconds' => $log->duration_seconds,
-          'total_so_far' => $totalRunningSeconds
-        ]);
-      } else if (!$log->end_time) {
+      if ($log->end_time) {
+        // Completed running period
+        $totalRunningSeconds += $log->duration_seconds ?? 0;
+      } else {
         // Currently running - calculate from start_time to now
         $startTime = $log->start_time;
         $now = now('Asia/Jakarta');
