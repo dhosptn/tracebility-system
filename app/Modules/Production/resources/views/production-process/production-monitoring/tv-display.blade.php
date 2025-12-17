@@ -553,22 +553,13 @@
         window.monitoringId = {{ $monitoring->monitoring_id }};
         window.machineCode = '{{ $monitoring->machine->machine_code ?? 'N/A' }}';
     </script>
+    <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
+    <script src="{{ asset('js/mqtt-production-handler.js') }}?v={{ time() }}"></script>
     <script>
-        // Load tv-display.js if exists
-        const tvDisplayScript = document.createElement('script');
-        tvDisplayScript.src = "{{ asset('js/tv-display.js') }}?v={{ time() }}";
-        tvDisplayScript.onerror = function() {
-            console.warn('tv-display.js not found, using inline implementation');
-        };
-        document.head.appendChild(tvDisplayScript);
-
-        // Load mqtt-production-handler.js if exists
-        const mqttScript = document.createElement('script');
-        mqttScript.src = "{{ asset('js/mqtt-production-handler.js') }}?v={{ time() }}";
-        mqttScript.onerror = function() {
-            console.warn('mqtt-production-handler.js not found, MQTT features disabled');
-        };
-        document.head.appendChild(mqttScript);
+        // Check if scripts loaded correctly
+        if (typeof window.initTvDisplay !== 'function') {
+            console.error('tv-display.js failed to load or declare initTvDisplay');
+        }
     </script>
     <script>
         // Initialize TV Display with monitoring data

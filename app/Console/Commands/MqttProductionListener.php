@@ -272,9 +272,10 @@ class MqttProductionListener extends Command
         return;
       }
 
-      // VALIDATION: Only accept qty_ok when status is Running
-      if ($monitoring->current_status !== 'Running') {
-        $this->warn("⚠ QTY OK signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}', not 'Running'");
+      // VALIDATION: Only accept qty_ok when status is Running or START
+      $currentStatus = strtoupper($monitoring->current_status);
+      if (!in_array($currentStatus, ['RUNNING', 'START'])) {
+        $this->warn("⚠ QTY OK signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}'");
         Log::warning("MQTT QTY OK REJECTED: Monitoring {$monitoringId}, Current Status: {$monitoring->current_status}");
         return;
       }
@@ -311,9 +312,10 @@ class MqttProductionListener extends Command
         return;
       }
 
-      // VALIDATION: Only accept NG when status is Running
-      if ($monitoring->current_status !== 'Running') {
-        $this->warn("⚠ NG signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}', not 'Running'");
+      // VALIDATION: Only accept NG when status is Running or START
+      $currentStatus = strtoupper($monitoring->current_status);
+      if (!in_array($currentStatus, ['RUNNING', 'START'])) {
+        $this->warn("⚠ NG signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}'");
         Log::warning("MQTT NG REJECTED: Monitoring {$monitoringId}, Current Status: {$monitoring->current_status}");
         return;
       }

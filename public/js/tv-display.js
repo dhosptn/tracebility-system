@@ -671,6 +671,8 @@ function setupFormHandlers() {
                 console.log('Save response:', res);
                 if(res.success) {
                     closeDowntimeModal();
+                    // Force visual update to Downtime immediately
+                    updateTimerStatus('Downtime');
                     fetchData();
                     // Reset form after save
                     $('#downtimeForm')[0].reset();

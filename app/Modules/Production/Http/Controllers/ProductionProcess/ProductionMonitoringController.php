@@ -322,62 +322,70 @@ class ProductionMonitoringController extends Controller
 
   public function saveDowntime(Request $request, $id)
   {
-    $request->validate([
-      'downtime_type' => 'required|string',
-      'downtime_reason' => 'required|string',
-    ]);
+    try {
+      $request->validate([
+        'downtime_type' => 'required|string',
+        'downtime_reason' => 'required|string',
+      ]);
 
-    $nowIndonesia = now('Asia/Jakarta');
-    $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
+      $nowIndonesia = now('Asia/Jakarta');
+      $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
-    // Save Downtime Record
-    \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
-      'monitoring_id' => $id,
-      'downtime_type' => $request->downtime_type,
-      'downtime_reason' => $request->downtime_reason,
-      'start_time' => $nowIndonesia,
-      'notes' => $request->notes,
-      'created_at' => $nowIndonesia
-    ]);
-
-    // FORCE STATUS UPDATE TO DOWNTIME (if not already)
-    if ($monitoring->current_status !== 'Downtime') {
-      // Close previous log
-      $lastLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
-        ->whereNull('end_time')
-        ->latest('start_time')
-        ->first();
-
-      if ($lastLog) {
-        $lastLog->update([
-          'end_time' => $nowIndonesia,
-          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
-        ]);
-      }
-
-      // Create new 'Downtime' status log
-      \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::create([
+      // Save Downtime Record
+      \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
         'monitoring_id' => $id,
-        'status' => 'Downtime',
+        'downtime_type' => $request->downtime_type,
+        'downtime_reason' => $request->downtime_reason,
         'start_time' => $nowIndonesia,
+        'notes' => $request->notes,
         'created_at' => $nowIndonesia
       ]);
 
-      // Update monitoring status
-      $monitoring->update([
-        'current_status' => 'Downtime',
-        'updated_at' => $nowIndonesia
-      ]);
-      
-      // Clear checking cache to update frontend immediately
-      Cache::forget("mqtt_status_signal_{$id}"); 
-      Cache::put("mqtt_status_signal_{$id}", ['show' => true, 'status' => 'Downtime'], 10);
-    }
+      // FORCE STATUS UPDATE TO DOWNTIME (if not already)
+      if ($monitoring->current_status !== 'Downtime') {
+        // Close previous log
+        $lastLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+          ->whereNull('end_time')
+          ->latest('start_time')
+          ->first();
 
-    return response()->json([
-      'success' => true,
-      'message' => 'Downtime recorded successfully'
-    ]);
+        if ($lastLog) {
+          $lastLog->update([
+            'end_time' => $nowIndonesia,
+            'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
+          ]);
+        }
+
+        // Create new 'Downtime' status log
+        \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::create([
+          'monitoring_id' => $id,
+          'status' => 'Downtime',
+          'start_time' => $nowIndonesia,
+          'created_at' => $nowIndonesia
+        ]);
+
+        // Update monitoring status
+        $monitoring->update([
+          'current_status' => 'Downtime',
+          'updated_at' => $nowIndonesia
+        ]);
+        
+        // Clear checking cache to update frontend immediately
+        Cache::forget("mqtt_status_signal_{$id}"); 
+        Cache::put("mqtt_status_signal_{$id}", ['show' => true, 'status' => 'Downtime'], 10);
+      }
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Downtime recorded successfully'
+      ]);
+    } catch (\Exception $e) {
+      \Log::error("Save Downtime Failed: " . $e->getMessage());
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to save downtime: ' . $e->getMessage()
+      ], 500);
+    }
   }
 
   public function saveNg(Request $request, $id)
