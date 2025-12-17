@@ -598,6 +598,16 @@
                 updateProductionTimer();
             }
 
+            // Helper function to format seconds to HH:MM:SS
+            function formatTimeFromSeconds(totalSeconds) {
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = Math.floor(totalSeconds % 60);
+                return String(hours).padStart(2, '0') + ':' +
+                    String(minutes).padStart(2, '0') + ':' +
+                    String(seconds).padStart(2, '0');
+            }
+
             function updateProductionTimer() {
                 let displaySeconds = baseAccumulatedSeconds;
 
@@ -828,15 +838,49 @@
                         const runningDuration = Math.floor((now - runningStartTime) / 1000);
                         baseAccumulatedSeconds += runningDuration;
                         runningStartTime = null;
-                        console.log('Timer paused. Accumulated:', baseAccumulatedSeconds, 'seconds');
+                        console.log('Timer paused. Running duration:', runningDuration, 'seconds');
+                        console.log('Total accumulated:', baseAccumulatedSeconds, 'seconds');
+                        console.log('Formatted time:', formatTimeFromSeconds(baseAccumulatedSeconds));
                         updateProductionTimer(); // Update display immediately
+                    } else {
+                        // Even if runningStartTime is null, still update display with baseAccumulatedSeconds
+                        console.log('Timer already stopped. Current accumulated:', baseAccumulatedSeconds,
+                            'seconds');
+                        updateProductionTimer();
                     }
                 }
 
                 currentStatus = newStatus;
                 updateStatusBadge(newStatus); // Update status badge
                 console.log('Status updated to:', newStatus);
+
+                // Send status update to backend to save to database
+                sendStatusUpdateToBackend(newStatus);
             };
+
+            // Send status update to backend
+            function sendStatusUpdateToBackend(status) {
+                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/update-status`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
+                                'content')
+                        },
+                        body: JSON.stringify({
+                            status: status
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('Status saved to backend:', status);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error saving status to backend:', error);
+                    });
+            }
 
             // Fetch accumulated running time from server on load
             function fetchAccumulatedTime() {
