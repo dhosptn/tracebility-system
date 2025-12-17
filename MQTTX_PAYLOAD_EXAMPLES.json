@@ -1,0 +1,200 @@
+{
+  "description": "Contoh payload untuk testing di MQTTX",
+  "topic_format": "production/{machine_code}/signal",
+  "examples": {
+    "status_running": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Running",
+        "time": "12:00:00"
+      }
+    },
+    "status_ready": {
+      "topic": "production/MC001/signal", 
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Ready",
+        "time": "12:00:00"
+      }
+    },
+    "status_downtime": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Downtime",
+        "time": "12:00:00"
+      }
+    },
+    "status_stopped": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Stopped",
+        "time": "12:00:00"
+      }
+    },
+    "qty_ok_single": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "qty_ok",
+        "mesin": "MC001",
+        "qty": 1,
+        "time": "12:05:30"
+      }
+    },
+    "qty_ok_multiple": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "qty_ok",
+        "mesin": "MC001",
+        "qty": 5,
+        "time": "12:05:30"
+      }
+    },
+    "ng_scratch": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "ng",
+        "mesin": "MC001",
+        "qty": 2,
+        "ng_type": "Scratch",
+        "ng_reason": "Surface defect",
+        "time": "12:10:00"
+      }
+    },
+    "ng_dimension": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "ng",
+        "mesin": "MC001",
+        "qty": 1,
+        "ng_type": "Dimension",
+        "ng_reason": "Out of tolerance",
+        "time": "12:10:00"
+      }
+    },
+    "downtime_breakdown": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "downtime",
+        "mesin": "MC001",
+        "downtime_type": "Breakdown",
+        "downtime_reason": "Motor failure",
+        "time": "12:15:00"
+      }
+    },
+    "downtime_maintenance": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "downtime",
+        "mesin": "MC001",
+        "downtime_type": "Maintenance",
+        "downtime_reason": "Scheduled maintenance",
+        "time": "12:15:00"
+      }
+    },
+    "downtime_material": {
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "downtime",
+        "mesin": "MC001",
+        "downtime_type": "Material Shortage",
+        "downtime_reason": "Waiting for material",
+        "time": "12:15:00"
+      }
+    }
+  },
+  "testing_sequence": [
+    {
+      "step": 1,
+      "description": "Set status to Running",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Running",
+        "time": "14:00:00"
+      }
+    },
+    {
+      "step": 2,
+      "description": "Add 5 OK products",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "qty_ok",
+        "mesin": "MC001",
+        "qty": 5,
+        "time": "14:01:00"
+      }
+    },
+    {
+      "step": 3,
+      "description": "Report 2 NG products",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "ng",
+        "mesin": "MC001",
+        "qty": 2,
+        "ng_type": "Scratch",
+        "ng_reason": "Surface defect",
+        "time": "14:02:00"
+      }
+    },
+    {
+      "step": 4,
+      "description": "Set status to Downtime",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Downtime",
+        "time": "14:03:00"
+      }
+    },
+    {
+      "step": 5,
+      "description": "Report downtime reason",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "downtime",
+        "mesin": "MC001",
+        "downtime_type": "Breakdown",
+        "downtime_reason": "Motor failure",
+        "time": "14:03:30"
+      }
+    },
+    {
+      "step": 6,
+      "description": "Set status back to Running",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "status",
+        "mesin": "MC001",
+        "status": "Running",
+        "time": "14:10:00"
+      }
+    },
+    {
+      "step": 7,
+      "description": "Continue production - add 3 OK",
+      "topic": "production/MC001/signal",
+      "payload": {
+        "trx_type": "qty_ok",
+        "mesin": "MC001",
+        "qty": 3,
+        "time": "14:11:00"
+      }
+    }
+  ],
+  "notes": [
+    "Ganti 'MC001' dengan machine_code yang ada di database Anda",
+    "Field 'time' bersifat opsional, jika tidak ada akan menggunakan waktu server",
+    "Pastikan ada production monitoring aktif untuk mesin tersebut",
+    "Monitor logs di storage/logs/laravel.log untuk debugging"
+  ]
+}

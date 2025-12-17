@@ -10,7 +10,9 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap"
+        rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
@@ -115,7 +117,8 @@
 <body class="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white h-screen overflow-hidden">
 
     <!-- Header Bar - Fixed Height -->
-    <div class="bg-slate-800/90 backdrop-blur-sm border-b border-cyan-500/30 px-4 py-2 shadow-xl h-10 flex items-center">
+    <div
+        class="bg-slate-800/90 backdrop-blur-sm border-b border-cyan-500/30 px-4 py-2 shadow-xl h-10 flex items-center">
         <div class="w-full grid grid-cols-3 items-center">
             <!-- Left: Current Info -->
             <div class="text-lg font-bold text-cyan-400 tracking-wide justify-self-start">CURRENT INFO</div>
@@ -173,7 +176,7 @@
 
             <!-- Bottom Cards Row -->
             <div class="flex gap-2 h-28">
-                 <!-- Machine Status -->
+                <!-- Machine Status -->
                 <div
                     class="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg shadow-2xl border border-slate-700/50 p-2 flex flex-col justify-center">
                     <div class="text-base font-bold text-cyan-400 tracking-wide mb-1 text-center">STATUS</div>
@@ -188,7 +191,8 @@
                 <div
                     class="flex-1 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-2xl p-2 flex flex-col justify-center">
                     <div class="text-base font-bold text-white tracking-wide mb-1 text-center">EST. FINISH</div>
-                    <div id="finishTime" class="text-xl font-bold text-white text-center font-mono leading-none">Calculating...</div>
+                    <div id="finishTime" class="text-xl font-bold text-white text-center font-mono leading-none">
+                        Calculating...</div>
                 </div>
             </div>
         </div>
@@ -197,82 +201,91 @@
         <div class="flex-1 flex flex-col gap-2 min-h-0 overflow-hidden">
             <!-- KPI Cards Row -->
             <div class="grid grid-cols-4 gap-3 h-32">
-    @php
-        $kpiCards = [
-            [
-                'id' => 'targetQty',
-                'title' => 'TARGET QTY',
-                'value' => $monitoring->wo_qty,
-                'unit' => 'PCS',
-                'color' => 'blue',
-                'border' => 'border-blue-500',
-                'text' => 'text-blue-300'  // Changed from text-blue-400 to text-blue-300
-            ],
-            [
-                'id' => 'actualQty',
-                'title' => 'ACTUAL QTY',
-                'value' => $monitoring->qty_actual,
-                'unit' => 'PCS',
-                'color' => 'green',
-                'border' => 'border-green-500',
-                'text' => 'text-emerald-300'  // Changed to emerald-300 for brighter green
-            ],
-            [
-                'id' => 'ngQty',
-                'title' => 'NG QTY',
-                'value' => $monitoring->qty_ng,
-                'unit' => 'PCS',
-                'color' => 'red',
-                'border' => 'border-red-500',
-                'text' => 'text-rose-300'  // Changed to rose-300 for brighter red
-            ],
-            [
-                'id' => 'progressPercent',
-                'title' => 'PROGRESS',
-                'value' =>
-                    $monitoring->wo_qty > 0
-                        ? number_format(($monitoring->qty_ok / $monitoring->wo_qty) * 100, 1, '.', '') . '%'
-                        : '0%',
-                'unit' => '',
-                'color' => 'amber',
-                'border' => 'border-amber-500',
-                'text' => 'text-amber-300'  // Changed from text-amber-400 to text-amber-300
-            ],
-        ];
-    @endphp
+                @php
+                    $kpiCards = [
+                        [
+                            'id' => 'targetQty',
+                            'title' => 'TARGET QTY',
+                            'value' => $monitoring->wo_qty,
+                            'unit' => 'PCS',
+                            'color' => 'blue',
+                            'border' => 'border-blue-500',
+                            'text' => 'text-blue-300', // Changed from text-blue-400 to text-blue-300
+                        ],
+                        [
+                            'id' => 'actualQty',
+                            'title' => 'ACTUAL QTY',
+                            'value' => $monitoring->qty_actual,
+                            'unit' => 'PCS',
+                            'color' => 'green',
+                            'border' => 'border-green-500',
+                            'text' => 'text-emerald-300', // Changed to emerald-300 for brighter green
+                        ],
+                        [
+                            'id' => 'ngQty',
+                            'title' => 'NG QTY',
+                            'value' => $monitoring->qty_ng,
+                            'unit' => 'PCS',
+                            'color' => 'red',
+                            'border' => 'border-red-500',
+                            'text' => 'text-rose-300', // Changed to rose-300 for brighter red
+                        ],
+                        [
+                            'id' => 'progressPercent',
+                            'title' => 'PROGRESS',
+                            'value' =>
+                                $monitoring->wo_qty > 0
+                                    ? number_format(($monitoring->qty_ok / $monitoring->wo_qty) * 100, 1, '.', '') . '%'
+                                    : '0%',
+                            'unit' => '',
+                            'color' => 'amber',
+                            'border' => 'border-amber-500',
+                            'text' => 'text-amber-300', // Changed from text-amber-400 to text-amber-300
+                        ],
+                    ];
+                @endphp
 
-    @foreach ($kpiCards as $card)
-        <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-t-4 {{ $card['border'] }} relative overflow-hidden group hover:from-slate-700 hover:to-slate-700/80 transition-all duration-300">
-            <div class="flex justify-between items-start">
-                <div class="text-base text-slate-200 tracking-tighter shadow-black drop-shadow-lg font-mono uppercase">{{ $card['title'] }}</div>
-                @if(!empty($card['unit']))
-                    <div class="text-[15px] font-bold text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">{{ $card['unit'] }}</div>
-                @endif
+                @foreach ($kpiCards as $card)
+                    <div
+                        class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-t-4 {{ $card['border'] }} relative overflow-hidden group hover:from-slate-700 hover:to-slate-700/80 transition-all duration-300">
+                        <div class="flex justify-between items-start">
+                            <div
+                                class="text-base text-slate-200 tracking-tighter shadow-black drop-shadow-lg font-mono uppercase">
+                                {{ $card['title'] }}</div>
+                            @if (!empty($card['unit']))
+                                <div class="text-[15px] font-bold text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">
+                                    {{ $card['unit'] }}</div>
+                            @endif
+                        </div>
+
+                        <div class="flex-1 flex items-end justify-end">
+                            <div id="{{ $card['id'] }}"
+                                class="text-5xl font-black {{ $card['text'] }} tracking-tighter drop-shadow-lg leading-none font-mono text-shadow-lg">
+                                {{ $card['value'] }}
+                            </div>
+                        </div>
+
+                        <!-- Decorative background glow -->
+                        <div
+                            class="absolute -bottom-6 -left-6 w-24 h-24 bg-{{ $card['color'] }}-500/10 rounded-full blur-2xl group-hover:bg-{{ $card['color'] }}-500/20 transition-all duration-500">
+                        </div>
+                    </div>
+                @endforeach
             </div>
-            
-            <div class="flex-1 flex items-end justify-end">
-                <div id="{{ $card['id'] }}" class="text-5xl font-black {{ $card['text'] }} tracking-tighter drop-shadow-lg leading-none font-mono text-shadow-lg">
-                    {{ $card['value'] }}
-                </div>
-            </div>
-            
-            <!-- Decorative background glow -->
-            <div class="absolute -bottom-6 -left-6 w-24 h-24 bg-{{ $card['color'] }}-500/10 rounded-full blur-2xl group-hover:bg-{{ $card['color'] }}-500/20 transition-all duration-500"></div>
-        </div>
-    @endforeach
-</div>
 
             <!-- Cycle Time Section -->
             <div class="grid grid-cols-4 gap-3 h-40 mb-2">
                 <!-- STD Cycle Time -->
-                <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-l-4 border-cyan-500 relative overflow-hidden group">
+                <div
+                    class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col justify-between border-l-4 border-cyan-500 relative overflow-hidden group">
                     <div class="absolute right-0 top-0 p-2 opacity-5">
                         <i class="fas fa-clock text-6xl"></i>
                     </div>
                     <div class="text-lg font-bold text-cyan-300 tracking-widest uppercase mb-1">STD CYCLE TIME</div>
                     <div class="flex-1 flex flex-col items-center justify-center">
                         <div class="flex items-baseline gap-1">
-                            <div id="stdCycleTime" class="text-5xl font-black text-white tracking-tighter shadow-black drop-shadow-lg font-mono">
+                            <div id="stdCycleTime"
+                                class="text-5xl font-black text-white tracking-tighter shadow-black drop-shadow-lg font-mono">
                                 {{ $monitoring->cycle_time }}
                             </div>
                             <span class="text-xl font-semibold text-slate-400">s</span>
@@ -281,12 +294,13 @@
                 </div>
 
                 <!-- Actual Cycle Time Section -->
-                <div class="col-span-3 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col relative overflow-hidden">
+                <div
+                    class="col-span-3 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-3 flex flex-col relative overflow-hidden">
                     <div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-2">
                         <div class="w-1 h-4 bg-emerald-500 rounded-full"></div>
                         <div class="text-lg font-bold text-slate-300 tracking-widest uppercase">ACTUAL CYCLE TIME</div>
                     </div>
-                    
+
                     <div class="flex-1 grid grid-cols-4 gap-0 divide-x divide-slate-600/50">
                         @php
                             $cycleItems = [
@@ -298,10 +312,14 @@
                         @endphp
 
                         @foreach ($cycleItems as $item)
-                            <div class="flex flex-col items-center justify-center px-4 relative group hover:bg-white/5 transition-colors duration-300 rounded-lg">
-                                <div class="text-lg font-bold text-slate-400 mb-1 tracking-widest uppercase">{{ $item['label'] }}</div>
+                            <div
+                                class="flex flex-col items-center justify-center px-4 relative group hover:bg-white/5 transition-colors duration-300 rounded-lg">
+                                <div class="text-lg font-bold text-slate-400 mb-1 tracking-widest uppercase">
+                                    {{ $item['label'] }}</div>
                                 <div class="flex items-baseline gap-1">
-                                    <div id="{{ $item['id'] }}" class="text-4xl font-black {{ $item['color'] }} tracking-tight font-mono">0</div>
+                                    <div id="{{ $item['id'] }}"
+                                        class="text-4xl font-black {{ $item['color'] }} tracking-tight font-mono">0
+                                    </div>
                                     <span class="text-xl font-medium text-slate-500">s</span>
                                 </div>
                             </div>
@@ -312,62 +330,72 @@
 
             <!-- OEE Section with Gauge Charts -->
             <div class="grid grid-cols-6 gap-2 h-40">
-    <!-- OEE Main Gauge (Now col-span-2 for smaller width) -->
-    <div class="col-span-2 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-xl p-2 relative border border-slate-600/30 overflow-hidden">
-        <div class="absolute top-2 left-3 text-lg font-bold text-purple-200 tracking-wider">OEE</div>
-        
-        <div class="w-full h-full flex items-end justify-center pb-1">
-            <svg viewBox="0 0 200 150" class="w-full h-full" style="max-height: 150px;">
-                <!-- Gauge Zones (Widened - Radius 85) -->
-                <!-- Red Zone (0-50%) -->
-                <path d="M 15 100 A 85 85 0 0 1 100 15" fill="none" stroke="#ef4444" stroke-width="15" />
-                <!-- Yellow Zone (50-75%) -->
-                <path d="M 100 15 A 85 85 0 0 1 160 40" fill="none" stroke="#eab308" stroke-width="15" />
-                <!-- Green Zone (75-100%) -->
-                <path d="M 160 40 A 85 85 0 0 1 185 100" fill="none" stroke="#10b981" stroke-width="15" />
+                <!-- OEE Main Gauge (Now col-span-2 for smaller width) -->
+                <div
+                    class="col-span-2 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-xl p-2 relative border border-slate-600/30 overflow-hidden">
+                    <div class="absolute top-2 left-3 text-lg font-bold text-purple-200 tracking-wider">OEE</div>
 
-                <!-- Ticks/Labels (Adjusted for wider gauge) -->
-                <text x="15" y="115" fill="#94a3b8" font-size="12" text-anchor="middle">0%</text>
-                <text x="100" y="10" fill="#94a3b8" font-size="12" text-anchor="middle">50%</text>
-                <text x="170" y="30" fill="#94a3b8" font-size="12" text-anchor="middle">75%</text>
-                <text x="185" y="115" fill="#94a3b8" font-size="12" text-anchor="middle">100%</text>
+                    <div class="w-full h-full flex items-end justify-center pb-1">
+                        <svg viewBox="0 0 200 150" class="w-full h-full" style="max-height: 150px;">
+                            <!-- Gauge Zones (Widened - Radius 85) -->
+                            <!-- Red Zone (0-50%) -->
+                            <path d="M 15 100 A 85 85 0 0 1 100 15" fill="none" stroke="#ef4444" stroke-width="15" />
+                            <!-- Yellow Zone (50-75%) -->
+                            <path d="M 100 15 A 85 85 0 0 1 160 40" fill="none" stroke="#eab308" stroke-width="15" />
+                            <!-- Green Zone (75-100%) -->
+                            <path d="M 160 40 A 85 85 0 0 1 185 100" fill="none" stroke="#10b981"
+                                stroke-width="15" />
 
-                <!-- Percentage Value -->
-                <text x="100" y="140" text-anchor="middle" fill="white" font-size="40" font-weight="900" id="oee" font-family="'JetBrains Mono', monospace">0.0%</text>
+                            <!-- Ticks/Labels (Adjusted for wider gauge) -->
+                            <text x="15" y="115" fill="#94a3b8" font-size="12" text-anchor="middle">0%</text>
+                            <text x="100" y="10" fill="#94a3b8" font-size="12" text-anchor="middle">50%</text>
+                            <text x="170" y="30" fill="#94a3b8" font-size="12" text-anchor="middle">75%</text>
+                            <text x="185" y="115" fill="#94a3b8" font-size="12" text-anchor="middle">100%</text>
 
-                <!-- Needle -->
-                <g id="oee_needle" style="transform-origin: 100px 100px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform: rotate(-90deg);">
-    <!-- White needle with subtle outline -->
-    <path d="M 100 25 L 96 100 L 100 105 L 104 100 Z" fill="#ffffff" stroke="#e2e8f0" stroke-width="0.8" filter="drop-shadow(0 3px 4px rgba(0,0,0,0.4))"/>
-    
-    <!-- Center pivot circle -->
-    <circle cx="100" cy="100" r="6" fill="#334155" stroke="#ffffff" stroke-width="2" />
-</g>
-            </svg>
-        </div>
-    </div>
+                            <!-- Percentage Value -->
+                            <text x="100" y="140" text-anchor="middle" fill="white" font-size="40"
+                                font-weight="900" id="oee"
+                                font-family="'JetBrains Mono', monospace">0.0%</text>
 
-    <!-- Small Cards for Breakdown - Now have more space (col-span-1 each) -->
-    @php
-        $smallCards = [
-            ['id' => 'availability', 'title' => 'AVAILABILITY', 'color' => 'blue'],
-            ['id' => 'performance', 'title' => 'PERFORMANCE', 'color' => 'green'],
-            ['id' => 'quality', 'title' => 'QUALITY', 'color' => 'yellow'],
-            ['id' => 'uptime', 'title' => 'UPTIME', 'color' => 'purple'],
-        ];
-    @endphp
+                            <!-- Needle -->
+                            <g id="oee_needle"
+                                style="transform-origin: 100px 100px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform: rotate(-90deg);">
+                                <!-- White needle with subtle outline -->
+                                <path d="M 100 25 L 96 100 L 100 105 L 104 100 Z" fill="#ffffff" stroke="#e2e8f0"
+                                    stroke-width="0.8" filter="drop-shadow(0 3px 4px rgba(0,0,0,0.4))" />
 
-    @foreach ($smallCards as $card)
-        <div class="col-span-1 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-xl p-2 flex flex-col items-center justify-center border border-slate-600/30">
-            <div class="text-[15px] font-bold text-slate-400 mb-1 tracking-wider text-center w-full uppercase">
-                {{ $card['title'] }}
+                                <!-- Center pivot circle -->
+                                <circle cx="100" cy="100" r="6" fill="#334155" stroke="#ffffff"
+                                    stroke-width="2" />
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Small Cards for Breakdown - Now have more space (col-span-1 each) -->
+                @php
+                    $smallCards = [
+                        ['id' => 'availability', 'title' => 'AVAILABILITY', 'color' => 'blue'],
+                        ['id' => 'performance', 'title' => 'PERFORMANCE', 'color' => 'green'],
+                        ['id' => 'quality', 'title' => 'QUALITY', 'color' => 'yellow'],
+                        ['id' => 'uptime', 'title' => 'UPTIME', 'color' => 'purple'],
+                    ];
+                @endphp
+
+                @foreach ($smallCards as $card)
+                    <div
+                        class="col-span-1 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-xl p-2 flex flex-col items-center justify-center border border-slate-600/30">
+                        <div
+                            class="text-[15px] font-bold text-slate-400 mb-1 tracking-wider text-center w-full uppercase">
+                            {{ $card['title'] }}
+                        </div>
+                        <div id="{{ $card['id'] }}"
+                            class="text-xl md:text-2xl font-black text-{{ $card['color'] }}-400 mb-0.5 leading-none font-mono">
+                            0.0%
+                        </div>
+                    </div>
+                @endforeach
             </div>
-            <div id="{{ $card['id'] }}" class="text-xl md:text-2xl font-black text-{{ $card['color'] }}-400 mb-0.5 leading-none font-mono">
-                0.0%
-            </div>
-        </div>
-    @endforeach
-</div>
 
             <!-- Timeline Chart -->
             <div class="timeline-container p-1 flex flex-col min-h-0">
@@ -519,9 +547,255 @@
         </div>
     </div>
 
+    <!-- MQTT Control Panel -->
+    <div id="mqttPanel"
+        class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+        <div
+            class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg shadow-2xl border border-cyan-500/50 p-6 w-[500px] max-w-[90vw] max-h-[90vh] overflow-y-auto scrollbar-custom">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-broadcast-tower text-cyan-400 text-2xl"></i>
+                    <h2 class="text-2xl font-bold text-white">MQTT Control Panel</h2>
+                </div>
+                <button onclick="closeMqttPanel()" class="text-slate-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Status Control -->
+                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                    <h3 class="text-lg font-bold text-cyan-300 mb-3 flex items-center gap-2">
+                        <i class="fas fa-toggle-on"></i> Status Control
+                    </h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="sendMqttStatus('Ready')"
+                            class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-clock mr-2"></i>Ready
+                        </button>
+                        <button onclick="sendMqttStatus('Running')"
+                            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-play mr-2"></i>Running
+                        </button>
+                        <button onclick="sendMqttStatus('Downtime')"
+                            class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>Downtime
+                        </button>
+                        <button onclick="sendMqttStatus('Stopped')"
+                            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-stop mr-2"></i>Stopped
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Qty OK Control -->
+                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                    <h3 class="text-lg font-bold text-green-300 mb-3 flex items-center gap-2">
+                        <i class="fas fa-check-circle"></i> Qty OK
+                    </h3>
+                    <div class="flex gap-2">
+                        <input type="number" id="mqttQtyOk" value="1" min="1"
+                            class="flex-1 bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-green-500 focus:outline-none">
+                        <button onclick="sendMqttQtyOk()"
+                            class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-paper-plane mr-2"></i>Send
+                        </button>
+                    </div>
+                </div>
+
+                <!-- NG Control -->
+                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                    <h3 class="text-lg font-bold text-red-300 mb-3 flex items-center gap-2">
+                        <i class="fas fa-times-circle"></i> NG Report
+                    </h3>
+                    <div class="space-y-2">
+                        <input type="number" id="mqttNgQty" value="1" min="1" placeholder="Qty"
+                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
+                        <input type="text" id="mqttNgType" placeholder="NG Type (e.g., Scratch)"
+                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
+                        <input type="text" id="mqttNgReason" placeholder="NG Reason"
+                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
+                        <button onclick="sendMqttNg()"
+                            class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-paper-plane mr-2"></i>Send NG
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Downtime Control -->
+                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                    <h3 class="text-lg font-bold text-orange-300 mb-3 flex items-center gap-2">
+                        <i class="fas fa-tools"></i> Downtime Report
+                    </h3>
+                    <div class="space-y-2">
+                        <select id="mqttDowntimeType"
+                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-orange-500 focus:outline-none">
+                            <option value="">-- Select Type --</option>
+                            <option value="Breakdown">Breakdown</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Material Shortage">Material Shortage</option>
+                            <option value="Setup">Setup</option>
+                        </select>
+                        <input type="text" id="mqttDowntimeReason" placeholder="Downtime Reason"
+                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-orange-500 focus:outline-none">
+                        <button onclick="sendMqttDowntime()"
+                            class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105">
+                            <i class="fas fa-paper-plane mr-2"></i>Send Downtime
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info -->
+                <div class="bg-cyan-900/30 border border-cyan-500/30 rounded-lg p-3">
+                    <p class="text-sm text-cyan-200">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Machine: <strong>{{ $monitoring->machine->machine_code ?? 'N/A' }}</strong>
+                    </p>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Sinyal akan dikirim ke topic: <code
+                            class="bg-slate-700 px-2 py-0.5 rounded">production/{{ $monitoring->machine->machine_code ?? 'xxx' }}/signal</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating MQTT Button -->
+    <button onclick="openMqttPanel()"
+        class="fixed bottom-6 right-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 z-40 group">
+        <i class="fas fa-broadcast-tower text-2xl"></i>
+        <span
+            class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+            MQTT
+        </span>
+        <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block">
+            <div class="bg-slate-800 text-white text-sm px-3 py-2 rounded-lg shadow-xl whitespace-nowrap">
+                MQTT Control Panel
+            </div>
+        </div>
+    </button>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
+    <script>
+        // MQTT Panel Functions
+        const monitoringId = {{ $monitoring->monitoring_id }};
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+        function openMqttPanel() {
+            document.getElementById('mqttPanel').classList.remove('hidden');
+        }
+
+        function closeMqttPanel() {
+            document.getElementById('mqttPanel').classList.add('hidden');
+        }
+
+        function sendMqttSignal(payload) {
+            fetch(`/production/production-monitoring/${monitoringId}/send-mqtt-signal`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('✓ MQTT signal sent successfully!', 'success');
+                        console.log('MQTT Signal:', data);
+                    } else {
+                        showNotification('✗ Failed to send MQTT signal: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('✗ Error sending MQTT signal', 'error');
+                });
+        }
+
+        function sendMqttStatus(status) {
+            sendMqttSignal({
+                trx_type: 'status',
+                status: status
+            });
+        }
+
+        function sendMqttQtyOk() {
+            const qty = parseInt(document.getElementById('mqttQtyOk').value) || 1;
+            sendMqttSignal({
+                trx_type: 'qty_ok',
+                qty: qty
+            });
+        }
+
+        function sendMqttNg() {
+            const qty = parseInt(document.getElementById('mqttNgQty').value) || 1;
+            const ngType = document.getElementById('mqttNgType').value;
+            const ngReason = document.getElementById('mqttNgReason').value;
+
+            if (!ngType || !ngReason) {
+                showNotification('✗ Please fill NG Type and Reason', 'error');
+                return;
+            }
+
+            sendMqttSignal({
+                trx_type: 'ng',
+                qty: qty,
+                ng_type: ngType,
+                ng_reason: ngReason
+            });
+
+            // Clear form
+            document.getElementById('mqttNgQty').value = 1;
+            document.getElementById('mqttNgType').value = '';
+            document.getElementById('mqttNgReason').value = '';
+        }
+
+        function sendMqttDowntime() {
+            const downtimeType = document.getElementById('mqttDowntimeType').value;
+            const downtimeReason = document.getElementById('mqttDowntimeReason').value;
+
+            if (!downtimeType || !downtimeReason) {
+                showNotification('✗ Please fill Downtime Type and Reason', 'error');
+                return;
+            }
+
+            sendMqttSignal({
+                trx_type: 'downtime',
+                downtime_type: downtimeType,
+                downtime_reason: downtimeReason
+            });
+
+            // Clear form
+            document.getElementById('mqttDowntimeType').value = '';
+            document.getElementById('mqttDowntimeReason').value = '';
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-20 right-6 z-50 px-6 py-4 rounded-lg shadow-2xl transform transition-all duration-300 ${
+                type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            } text-white font-bold`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Close panel with ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeMqttPanel();
+            }
+        });
+    </script>
     <script>
         // Initialize TV Display with monitoring data
         $(document).ready(function() {

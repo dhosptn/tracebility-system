@@ -436,4 +436,103 @@ class ProductionMonitoringController extends Controller
       'status' => null
     ]);
   }
+
+  /**
+   * Send MQTT signal with unified payload format
+   */
+  public function sendMqttSignal(Request $request, $id)
+  {
+    $request->validate([
+      'trx_type' => 'required|in:status,qty_ok,ng,downtime',
+    ]);
+
+    $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::with('machine')
+      ->findOrFail($id);
+
+    if (!$monitoring->machine) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Machine not found for this monitoring'
+      ], 404);
+    }
+
+    $machineCode = $monitoring->machine->machine_code;
+    $trxType = $request->trx_type;
+
+    // Build payload based on transaction type
+    $payload = [
+      'trx_type' => $trxType,
+      'mesin' => $machineCode,
+      'time' => now('Asia/Jakarta')->format('H:i:s')
+    ];
+
+    // Add specific fields based on trx_type
+    switch ($trxType) {
+      case 'status':
+        $request->validate(['status' => 'required|in:Ready,Running,Downtime,Stopped,Paused']);
+        $payload['status'] = $request->status;
+        break;
+
+      case 'qty_ok':
+        $payload['qty'] = $request->qty ?? 1;
+        break;
+
+      case 'ng':
+        $request->validate([
+          'qty' => 'required|integer|min:1',
+          'ng_type' => 'required|string',
+          'ng_reason' => 'required|string'
+        ]);
+        $payload['qty'] = $request->qty;
+        $payload['ng_type'] = $request->ng_type;
+        $payload['ng_reason'] = $request->ng_reason;
+        break;
+
+      case 'downtime':
+        $request->validate([
+          'downtime_type' => 'required|string',
+          'downtime_reason' => 'required|string'
+        ]);
+        $payload['downtime_type'] = $request->downtime_type;
+        $payload['downtime_reason'] = $request->downtime_reason;
+        break;
+    }
+
+    // Send MQTT message
+    try {
+      $mqttService = new \App\Services\MqttService();
+
+      if (!$mqttService->connect()) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Failed to connect to MQTT broker'
+        ], 500);
+      }
+
+      $topic = "production/{$machineCode}/signal";
+      $message = json_encode($payload);
+
+      $mqttService->publish($topic, $message);
+      $mqttService->disconnect();
+
+      \Log::info("MQTT Signal Sent", [
+        'topic' => $topic,
+        'payload' => $payload
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'MQTT signal sent successfully',
+        'topic' => $topic,
+        'payload' => $payload
+      ]);
+    } catch (\Exception $e) {
+      \Log::error('Failed to send MQTT signal: ' . $e->getMessage());
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to send MQTT signal: ' . $e->getMessage()
+      ], 500);
+    }
+  }
 }

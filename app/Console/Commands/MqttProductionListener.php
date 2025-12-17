@@ -67,22 +67,272 @@ class MqttProductionListener extends Command
 
   protected function subscribeToTopics()
   {
-    // Subscribe to QTY OK signals
+    // Subscribe to unified production topic with trx_type
+    $this->mqttService->subscribe('production/+/signal', function ($topic, $message) {
+      $this->handleUnifiedSignal($topic, $message);
+    });
+
+    // Keep backward compatibility with old topics
     $this->mqttService->subscribe('production/+/qty_ok', function ($topic, $message) {
       $this->handleQtyOk($topic, $message);
     });
 
-    // Subscribe to Status signals (Ready/Running/Downtime/Stop)
     $this->mqttService->subscribe('production/+/status', function ($topic, $message) {
       $this->handleStatus($topic, $message);
     });
 
-    // Subscribe to NG signals
     $this->mqttService->subscribe('production/+/ng', function ($topic, $message) {
       $this->handleNg($topic, $message);
     });
 
-    $this->info('Subscribed to production topics');
+    $this->info('Subscribed to production topics (unified + legacy)');
+  }
+
+  /**
+   * Handle unified signal with trx_type
+   * Expected payload: { trx_type: "status", mesin: "xxx", status: "Running", time: "12:00:00" }
+   */
+  protected function handleUnifiedSignal($topic, $message)
+  {
+    try {
+      $this->info("DEBUG: Received unified signal on topic: {$topic}");
+      $this->info("DEBUG: Message content: {$message}");
+
+      $data = json_decode($message, true);
+
+      if (!$data) {
+        $this->error("DEBUG: Failed to parse JSON: {$message}");
+        Log::error("Unified Signal: Failed to parse JSON: {$message}");
+        return;
+      }
+
+      $trxType = $data['trx_type'] ?? null;
+      $mesin = $data['mesin'] ?? $data['machine_code'] ?? null;
+      $time = $data['time'] ?? now('Asia/Jakarta')->format('H:i:s');
+
+      $this->info("DEBUG: Parsed - trx_type: {$trxType}, mesin: {$mesin}, time: {$time}");
+
+      if (!$trxType) {
+        Log::warning('Unified Signal: trx_type not provided');
+        return;
+      }
+
+      // Find monitoring_id by machine code
+      $monitoringId = $this->findMonitoringIdByMachine($mesin);
+      if (!$monitoringId) {
+        Log::warning("Unified Signal: No active monitoring found for machine: {$mesin}");
+        $this->error("DEBUG: No active monitoring found for machine: {$mesin}");
+        return;
+      }
+
+      // Route to appropriate handler based on trx_type
+      switch ($trxType) {
+        case 'status':
+          $status = $data['status'] ?? null;
+          if ($status) {
+            $this->handleStatusUpdate($monitoringId, $status, $time);
+          }
+          break;
+
+        case 'qty_ok':
+          $qty = $data['qty'] ?? 1;
+          $this->handleQtyOkUpdate($monitoringId, $qty, $time);
+          break;
+
+        case 'ng':
+          $qty = $data['qty'] ?? 1;
+          $ngType = $data['ng_type'] ?? 'Unknown';
+          $ngReason = $data['ng_reason'] ?? 'From MQTT';
+          $this->handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $time);
+          break;
+
+        case 'downtime':
+          $downtimeType = $data['downtime_type'] ?? 'Unknown';
+          $downtimeReason = $data['downtime_reason'] ?? 'From MQTT';
+          $this->handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $time);
+          break;
+
+        default:
+          Log::warning("Unified Signal: Unknown trx_type: {$trxType}");
+          $this->error("DEBUG: Unknown trx_type: {$trxType}");
+      }
+    } catch (\Exception $e) {
+      Log::error('Error handling unified signal: ' . $e->getMessage());
+      $this->error("ERROR: " . $e->getMessage());
+    }
+  }
+
+  /**
+   * Find active monitoring ID by machine code
+   */
+  protected function findMonitoringIdByMachine($machineCode)
+  {
+    if (!$machineCode) {
+      return null;
+    }
+
+    // Find active monitoring by machine code
+    $monitoring = ProductionMonitoring::whereHas('machine', function ($query) use ($machineCode) {
+      $query->where('machine_code', $machineCode);
+    })
+      ->where('is_active', 1)
+      ->latest('start_time')
+      ->first();
+
+    return $monitoring ? $monitoring->monitoring_id : null;
+  }
+
+  /**
+   * Handle status update from unified signal
+   */
+  protected function handleStatusUpdate($monitoringId, $status, $time = null)
+  {
+    try {
+      $monitoring = ProductionMonitoring::find($monitoringId);
+      if (!$monitoring) {
+        return;
+      }
+
+      // Normalize status values
+      $statusMap = [
+        'Run' => 'Running',
+        'Stop' => 'Stopped',
+        'Running' => 'Running',
+        'Stopped' => 'Stopped',
+        'Ready' => 'Ready',
+        'Paused' => 'Paused',
+        'Downtime' => 'Downtime'
+      ];
+
+      $normalizedStatus = $statusMap[$status] ?? $status;
+      $nowIndonesia = now('Asia/Jakarta');
+
+      // Close previous status log
+      $lastLog = ProductionStatusLog::where('monitoring_id', $monitoringId)
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
+
+      if ($lastLog) {
+        $lastLog->update([
+          'end_time' => $nowIndonesia,
+          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
+        ]);
+      }
+
+      // Create new status log
+      ProductionStatusLog::create([
+        'monitoring_id' => $monitoringId,
+        'status' => $normalizedStatus,
+        'start_time' => $nowIndonesia,
+        'created_at' => $nowIndonesia
+      ]);
+
+      // Update monitoring status
+      $monitoring->update([
+        'current_status' => $normalizedStatus,
+        'updated_at' => $nowIndonesia
+      ]);
+
+      // Signal frontend
+      if ($normalizedStatus === 'Downtime') {
+        Cache::put("mqtt_show_downtime_form_{$monitoringId}", true, 300);
+      }
+
+      Cache::put("mqtt_status_signal_{$monitoringId}", [
+        'status' => $normalizedStatus,
+        'timestamp' => $nowIndonesia->toIso8601String()
+      ], 60);
+
+      $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus}");
+      Log::info("MQTT Status: Monitoring {$monitoringId}, Status: {$normalizedStatus}");
+    } catch (\Exception $e) {
+      Log::error('Error handling status update: ' . $e->getMessage());
+    }
+  }
+
+  /**
+   * Handle qty OK update from unified signal
+   */
+  protected function handleQtyOkUpdate($monitoringId, $qty, $time = null)
+  {
+    try {
+      $monitoring = ProductionMonitoring::find($monitoringId);
+      if (!$monitoring) {
+        return;
+      }
+
+      $monitoring->increment('qty_ok', $qty);
+      $monitoring->increment('qty_actual', $qty);
+
+      // Record OK timestamp for cycle time calculation
+      $this->recordOkTimestamp($monitoringId);
+
+      // Broadcast to frontend
+      Cache::put("mqtt_qty_ok_{$monitoringId}", [
+        'qty_ok' => $monitoring->qty_ok,
+        'qty_actual' => $monitoring->qty_actual,
+        'timestamp' => now('Asia/Jakarta')->toIso8601String()
+      ], 60);
+
+      $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty}");
+      Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}");
+    } catch (\Exception $e) {
+      Log::error('Error handling qty OK update: ' . $e->getMessage());
+    }
+  }
+
+  /**
+   * Handle NG update from unified signal
+   */
+  protected function handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $time = null)
+  {
+    try {
+      $monitoring = ProductionMonitoring::find($monitoringId);
+      if (!$monitoring) {
+        return;
+      }
+
+      // Signal frontend to show NG form
+      Cache::put("mqtt_ng_signal_{$monitoringId}", [
+        'show' => true,
+        'qty' => $qty,
+        'ng_type' => $ngType,
+        'ng_reason' => $ngReason,
+        'timestamp' => now('Asia/Jakarta')->toIso8601String()
+      ], 300);
+
+      $this->info("✓ NG signal received for monitoring {$monitoringId}: qty {$qty}");
+      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Type: {$ngType}");
+    } catch (\Exception $e) {
+      Log::error('Error handling NG update: ' . $e->getMessage());
+    }
+  }
+
+  /**
+   * Handle downtime update from unified signal
+   */
+  protected function handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $time = null)
+  {
+    try {
+      $monitoring = ProductionMonitoring::find($monitoringId);
+      if (!$monitoring) {
+        return;
+      }
+
+      // Signal frontend to show downtime form
+      Cache::put("mqtt_downtime_signal_{$monitoringId}", [
+        'show' => true,
+        'downtime_type' => $downtimeType,
+        'downtime_reason' => $downtimeReason,
+        'timestamp' => now('Asia/Jakarta')->toIso8601String()
+      ], 300);
+
+      $this->info("✓ Downtime signal received for monitoring {$monitoringId}");
+      Log::info("MQTT Downtime: Monitoring {$monitoringId}, Type: {$downtimeType}");
+    } catch (\Exception $e) {
+      Log::error('Error handling downtime update: ' . $e->getMessage());
+    }
   }
 
   protected function handleQtyOk($topic, $message)
