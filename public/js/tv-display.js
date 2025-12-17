@@ -145,8 +145,11 @@ function updateFinishTime(qty_ok, targetQty, avgCycleTime) {
 // Update Machine Status
 function updateStatus(status) {
     const badge = $("#statusBadge");
+    
+    // Normalize status string
+    const normalizedStatus = String(status).trim().toLowerCase();
 
-    if (status === "Running") {
+    if (normalizedStatus === "running") {
         badge
             .removeClass()
             .addClass(
@@ -155,7 +158,7 @@ function updateStatus(status) {
         badge.html(
             '<div class="text-2xl font-black text-white tracking-widest">RUN</div>'
         );
-    } else if (status === "Paused" || status === "Ready") {
+    } else if (normalizedStatus === "ready") {
         badge
             .removeClass()
             .addClass(
@@ -164,7 +167,7 @@ function updateStatus(status) {
         badge.html(
             '<div class="text-2xl font-black text-white tracking-widest">IDLE</div>'
         );
-    } else if (status === "Stop" || status === "STOP" || status === "stop") {
+    } else if (normalizedStatus === "stop" || normalizedStatus === "stopped") {
         badge
             .removeClass()
             .addClass(
@@ -173,7 +176,7 @@ function updateStatus(status) {
         badge.html(
             '<div class="text-2xl font-black text-white tracking-widest">STOP</div>'
         );
-    } else {
+    } else if (normalizedStatus === "downtime") {
         badge
             .removeClass()
             .addClass(
@@ -182,7 +185,28 @@ function updateStatus(status) {
         badge.html(
             '<div class="text-2xl font-black text-white tracking-widest">DOWNTIME</div>'
         );
+    } else if (normalizedStatus === "paused") {
+        badge
+            .removeClass()
+            .addClass(
+                "bg-gradient-to-r from-blue-500 to-blue-600 px-12 py-4 rounded-xl shadow-xl"
+            );
+        badge.html(
+            '<div class="text-2xl font-black text-white tracking-widest">PAUSED</div>'
+        );
+    } else {
+        // Default to STOP for unknown status instead of DOWNTIME
+        badge
+            .removeClass()
+            .addClass(
+                "bg-gradient-to-r from-gray-600 to-slate-700 px-12 py-4 rounded-xl shadow-xl"
+            );
+        badge.html(
+            '<div class="text-2xl font-black text-white tracking-widest">STOP</div>'
+        );
     }
+    
+    console.log('Status updated to:', normalizedStatus);
 }
 
 // Format time to HH:MM:SS
@@ -425,6 +449,11 @@ function fetchData() {
             // Update Finish Time
             updateFinishTime(data.qty_actual, data.wo_qty, data.avg_cycle_time);
 
+            // CHECK PRODUCTION FINISH - Call the function from blade if it exists
+            if (typeof window.checkProductionFinish === 'function') {
+                window.checkProductionFinish();
+            }
+
             // CHECK AUTOSAVE
             // If target met and not yet saved
             if (data.qty_ok >= data.wo_qty && !state.hasAutoSaved && data.wo_qty > 0) {
@@ -569,6 +598,67 @@ function closeDowntimeModal() {
     $("#downtimeForm")[0].reset();
 }
 
+// Status Confirmation Modal
+function showStatusConfirmationModal(newStatus) {
+    const statusText = newStatus === 'Running' ? 'RUN' : 
+                      newStatus === 'Stopped' ? 'STOP' : 
+                      newStatus === 'Ready' ? 'READY' : 
+                      newStatus === 'Downtime' ? 'DOWNTIME' : 
+                      newStatus === 'Paused' ? 'PAUSED' : newStatus;
+    
+    const statusColor = newStatus === 'Running' ? 'green' : 
+                       newStatus === 'Stopped' ? 'gray' : 
+                       newStatus === 'Ready' ? 'blue' : 
+                       newStatus === 'Downtime' ? 'red' : 
+                       newStatus === 'Paused' ? 'blue' : 'gray';
+    
+    // Store the pending status
+    window.pendingStatus = newStatus;
+    
+    // Show modal
+    const modal = `
+        <div id="statusConfirmationModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg shadow-2xl border border-slate-700 p-6 w-96 max-w-[90vw]">
+                <div class="flex items-center gap-3 mb-4">
+                    <i class="fas fa-info-circle text-${statusColor}-500 text-2xl"></i>
+                    <h2 class="text-xl font-bold text-white">Confirm Status Change</h2>
+                </div>
+                <p class="text-slate-300 mb-6">
+                    Are you sure you want to change machine status to <span class="font-bold text-${statusColor}-400">${statusText}</span>?
+                </p>
+                <div class="flex gap-3">
+                    <button onclick="rejectStatusChange()" class="flex-1 bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 rounded transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="acceptStatusChange()" class="flex-1 bg-${statusColor}-600 hover:bg-${statusColor}-700 text-white font-bold py-2 rounded transition-colors">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    $('#statusConfirmationModal').remove();
+    
+    // Add modal to body
+    $('body').append(modal);
+}
+
+function acceptStatusChange() {
+    if (window.pendingStatus) {
+        updateStatus(window.pendingStatus);
+        fetchData();
+        $('#statusConfirmationModal').remove();
+        window.pendingStatus = null;
+    }
+}
+
+function rejectStatusChange() {
+    $('#statusConfirmationModal').remove();
+    window.pendingStatus = null;
+}
+
 // Setup Form Handlers
 function setupFormHandlers() {
     // NG Form Submit
@@ -644,8 +734,8 @@ function checkMqttSignals() {
         type: "GET",
         success: function (response) {
             if (response.show && response.status) {
-                updateStatus(response.status);
-                fetchData();
+                // Show confirmation modal before updating status
+                showStatusConfirmationModal(response.status);
             }
         },
     });
@@ -656,4 +746,7 @@ window.openNgModal = openNgModal;
 window.closeNgModal = closeNgModal;
 window.openDowntimeModal = openDowntimeModal;
 window.closeDowntimeModal = closeDowntimeModal;
+window.showStatusConfirmationModal = showStatusConfirmationModal;
+window.acceptStatusChange = acceptStatusChange;
+window.rejectStatusChange = rejectStatusChange;
 window.initTvDisplay = init;

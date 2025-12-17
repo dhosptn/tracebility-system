@@ -205,7 +205,33 @@ class MqttProductionListener extends Command
       ];
 
       $normalizedStatus = $statusMap[$status] ?? $status;
+      
+      // Use time from MQTT payload if provided, otherwise use current server time
       $nowIndonesia = now('Asia/Jakarta');
+      if ($time) {
+        try {
+          // Parse time from MQTT payload (format: "HH:mm:ss")
+          $timeParts = explode(':', $time);
+          if (count($timeParts) === 3) {
+            $hours = (int)$timeParts[0];
+            $minutes = (int)$timeParts[1];
+            $seconds = (int)$timeParts[2];
+            
+            // Create datetime with today's date and the time from MQTT
+            $nowIndonesia = now('Asia/Jakarta')
+              ->setHour($hours)
+              ->setMinute($minutes)
+              ->setSecond($seconds);
+            
+            \Log::info("Using MQTT time for status update", [
+              'mqtt_time' => $time,
+              'parsed_datetime' => $nowIndonesia->toIso8601String()
+            ]);
+          }
+        } catch (\Exception $e) {
+          \Log::warning("Failed to parse MQTT time, using server time: " . $e->getMessage());
+        }
+      }
 
       // Close previous status log
       $lastLog = ProductionStatusLog::where('monitoring_id', $monitoringId)

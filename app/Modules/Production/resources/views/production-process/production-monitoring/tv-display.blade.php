@@ -547,260 +547,14 @@
         </div>
     </div>
 
-    <!-- MQTT Control Panel -->
-    <div id="mqttPanel"
-        class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-        <div
-            class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg shadow-2xl border border-cyan-500/50 p-6 w-[500px] max-w-[90vw] max-h-[90vh] overflow-y-auto scrollbar-custom">
-            <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-broadcast-tower text-cyan-400 text-2xl"></i>
-                    <h2 class="text-2xl font-bold text-white">MQTT Control Panel</h2>
-                </div>
-                <button onclick="closeMqttPanel()" class="text-slate-400 hover:text-white transition-colors">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-
-            <div class="space-y-4">
-                <!-- Status Control -->
-                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-cyan-300 mb-3 flex items-center gap-2">
-                        <i class="fas fa-toggle-on"></i> Status Control
-                    </h3>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="sendMqttStatus('Ready')"
-                            class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-clock mr-2"></i>Ready
-                        </button>
-                        <button onclick="sendMqttStatus('Running')"
-                            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-play mr-2"></i>Running
-                        </button>
-                        <button onclick="sendMqttStatus('Downtime')"
-                            class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-exclamation-triangle mr-2"></i>Downtime
-                        </button>
-                        <button onclick="sendMqttStatus('Stopped')"
-                            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-stop mr-2"></i>Stopped
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Qty OK Control -->
-                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-green-300 mb-3 flex items-center gap-2">
-                        <i class="fas fa-check-circle"></i> Qty OK
-                    </h3>
-                    <div class="flex gap-2">
-                        <input type="number" id="mqttQtyOk" value="1" min="1"
-                            class="flex-1 bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-green-500 focus:outline-none">
-                        <button onclick="sendMqttQtyOk()"
-                            class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-paper-plane mr-2"></i>Send
-                        </button>
-                    </div>
-                </div>
-
-                <!-- NG Control -->
-                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-red-300 mb-3 flex items-center gap-2">
-                        <i class="fas fa-times-circle"></i> NG Report
-                    </h3>
-                    <div class="space-y-2">
-                        <input type="number" id="mqttNgQty" value="1" min="1" placeholder="Qty"
-                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
-                        <input type="text" id="mqttNgType" placeholder="NG Type (e.g., Scratch)"
-                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
-                        <input type="text" id="mqttNgReason" placeholder="NG Reason"
-                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-red-500 focus:outline-none">
-                        <button onclick="sendMqttNg()"
-                            class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-paper-plane mr-2"></i>Send NG
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Downtime Control -->
-                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-orange-300 mb-3 flex items-center gap-2">
-                        <i class="fas fa-tools"></i> Downtime Report
-                    </h3>
-                    <div class="space-y-2">
-                        <select id="mqttDowntimeType"
-                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-orange-500 focus:outline-none">
-                            <option value="">-- Select Type --</option>
-                            <option value="Breakdown">Breakdown</option>
-                            <option value="Maintenance">Maintenance</option>
-                            <option value="Material Shortage">Material Shortage</option>
-                            <option value="Setup">Setup</option>
-                        </select>
-                        <input type="text" id="mqttDowntimeReason" placeholder="Downtime Reason"
-                            class="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-orange-500 focus:outline-none">
-                        <button onclick="sendMqttDowntime()"
-                            class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105">
-                            <i class="fas fa-paper-plane mr-2"></i>Send Downtime
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Info -->
-                <div class="bg-cyan-900/30 border border-cyan-500/30 rounded-lg p-3">
-                    <p class="text-sm text-cyan-200">
-                        <i class="fas fa-info-circle mr-2"></i>
-                        Machine: <strong>{{ $monitoring->machine->machine_code ?? 'N/A' }}</strong>
-                    </p>
-                    <p class="text-xs text-slate-400 mt-1">
-                        Sinyal akan dikirim ke topic: <code
-                            class="bg-slate-700 px-2 py-0.5 rounded">production/{{ $monitoring->machine->machine_code ?? 'xxx' }}/signal</code>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Floating MQTT Button -->
-    <button onclick="openMqttPanel()"
-        class="fixed bottom-6 right-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 z-40 group">
-        <i class="fas fa-broadcast-tower text-2xl"></i>
-        <span
-            class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
-            MQTT
-        </span>
-        <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block">
-            <div class="bg-slate-800 text-white text-sm px-3 py-2 rounded-lg shadow-xl whitespace-nowrap">
-                MQTT Control Panel
-            </div>
-        </div>
-    </button>
-
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
     <script>
-        // MQTT Panel Functions
-        const monitoringId = {{ $monitoring->monitoring_id }};
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-
-        function openMqttPanel() {
-            document.getElementById('mqttPanel').classList.remove('hidden');
-        }
-
-        function closeMqttPanel() {
-            document.getElementById('mqttPanel').classList.add('hidden');
-        }
-
-        function sendMqttSignal(payload) {
-            fetch(`/production/production-monitoring/${monitoringId}/send-mqtt-signal`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken
-                    },
-                    body: JSON.stringify(payload)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification('✓ MQTT signal sent successfully!', 'success');
-                        console.log('MQTT Signal:', data);
-                    } else {
-                        showNotification('✗ Failed to send MQTT signal: ' + data.message, 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showNotification('✗ Error sending MQTT signal', 'error');
-                });
-        }
-
-        function sendMqttStatus(status) {
-            sendMqttSignal({
-                trx_type: 'status',
-                status: status
-            });
-
-            // Update timer status immediately
-            if (typeof window.updateTimerStatus === 'function') {
-                window.updateTimerStatus(status);
-            }
-        }
-
-        function sendMqttQtyOk() {
-            const qty = parseInt(document.getElementById('mqttQtyOk').value) || 1;
-            sendMqttSignal({
-                trx_type: 'qty_ok',
-                qty: qty
-            });
-        }
-
-        function sendMqttNg() {
-            const qty = parseInt(document.getElementById('mqttNgQty').value) || 1;
-            const ngType = document.getElementById('mqttNgType').value;
-            const ngReason = document.getElementById('mqttNgReason').value;
-
-            if (!ngType || !ngReason) {
-                showNotification('✗ Please fill NG Type and Reason', 'error');
-                return;
-            }
-
-            sendMqttSignal({
-                trx_type: 'ng',
-                qty: qty,
-                ng_type: ngType,
-                ng_reason: ngReason
-            });
-
-            // Clear form
-            document.getElementById('mqttNgQty').value = 1;
-            document.getElementById('mqttNgType').value = '';
-            document.getElementById('mqttNgReason').value = '';
-        }
-
-        function sendMqttDowntime() {
-            const downtimeType = document.getElementById('mqttDowntimeType').value;
-            const downtimeReason = document.getElementById('mqttDowntimeReason').value;
-
-            if (!downtimeType || !downtimeReason) {
-                showNotification('✗ Please fill Downtime Type and Reason', 'error');
-                return;
-            }
-
-            sendMqttSignal({
-                trx_type: 'downtime',
-                downtime_type: downtimeType,
-                downtime_reason: downtimeReason
-            });
-
-            // Clear form
-            document.getElementById('mqttDowntimeType').value = '';
-            document.getElementById('mqttDowntimeReason').value = '';
-        }
-
-        function showNotification(message, type = 'success') {
-            const notification = document.createElement('div');
-            notification.className = `fixed top-20 right-6 z-50 px-6 py-4 rounded-lg shadow-2xl transform transition-all duration-300 ${
-                type === 'success' ? 'bg-green-600' : 'bg-red-600'
-            } text-white font-bold`;
-            notification.textContent = message;
-
-            document.body.appendChild(notification);
-
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
-
-        // Close panel with ESC key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeMqttPanel();
-            }
-        });
+        // Pass monitoring data to MQTT panel
+        window.monitoringId = {{ $monitoring->monitoring_id }};
+        window.machineCode = '{{ $monitoring->machine->machine_code ?? 'N/A' }}';
     </script>
+    <script src="{{ asset('js/tv-display.js') }}?v={{ time() }}"></script>
     <script>
         // Initialize TV Display with monitoring data
         $(document).ready(function() {
@@ -874,7 +628,70 @@
                     String(displaySeconds_final).padStart(2, '0');
 
                 document.getElementById('currentTimer').textContent = timerString;
+
+                // Check if production is finished
+                checkProductionFinish();
             }
+
+            // Check if production is finished (qty_ok >= wo_qty)
+            function checkProductionFinish() {
+                const actualQtyElement = document.getElementById('actualQty');
+                const targetQtyElement = document.getElementById('targetQty');
+                const currentTimerElement = document.getElementById('currentTimer');
+                const currentTimerLabel = document.querySelector('[id="currentTimer"]').parentElement.querySelector(
+                    'div:first-child');
+
+                if (!actualQtyElement || !targetQtyElement) return;
+
+                const actualQty = parseInt(actualQtyElement.textContent) || 0;
+                const targetQty = parseInt(targetQtyElement.textContent) || 0;
+
+                // Check if finished
+                if (actualQty >= targetQty && targetQty > 0) {
+                    // Change label to FINISH
+                    if (currentTimerLabel) {
+                        currentTimerLabel.textContent = 'FINISH';
+                        currentTimerLabel.classList.add('text-green-400');
+                        currentTimerLabel.classList.remove('text-white');
+                    }
+
+                    // Stop timer if still running - save accumulated time
+                    if (currentStatus === 'Running') {
+                        const now = Date.now();
+                        if (runningStartTime) {
+                            const runningDuration = Math.floor((now - runningStartTime) / 1000);
+                            baseAccumulatedSeconds += runningDuration;
+                        }
+                        runningStartTime = null;
+                        console.log('Production finished! Qty reached target. Final time:', baseAccumulatedSeconds,
+                            'seconds');
+                    }
+
+                    // Change background color to green
+                    currentTimerElement.parentElement.classList.remove('from-blue-600', 'to-blue-700');
+                    currentTimerElement.parentElement.classList.add('from-green-600', 'to-green-700');
+
+                    // Auto-change status to Ready if still Running
+                    if (currentStatus === 'Running') {
+                        console.log('Auto-changing status to Ready');
+                        updateTimerStatus('Ready');
+                    }
+                } else {
+                    // Reset to CURRENT TIME if not finished
+                    if (currentTimerLabel && currentTimerLabel.textContent === 'FINISH') {
+                        currentTimerLabel.textContent = 'CURRENT TIME';
+                        currentTimerLabel.classList.remove('text-green-400');
+                        currentTimerLabel.classList.add('text-white');
+
+                        // Reset background color
+                        currentTimerElement.parentElement.classList.remove('from-green-600', 'to-green-700');
+                        currentTimerElement.parentElement.classList.add('from-blue-600', 'to-blue-700');
+                    }
+                }
+            }
+
+            // Expose checkProductionFinish to global scope for tv-display.js
+            window.checkProductionFinish = checkProductionFinish;
 
             // Sync timer with server every 2 seconds to detect MQTT changes
             function syncTimerWithServer() {
@@ -892,12 +709,19 @@
                             const previousStatus = currentStatus;
                             const previousAccumulated = baseAccumulatedSeconds;
 
-                            baseAccumulatedSeconds = data.accumulated_seconds || 0;
+                            // Use the maximum of server time and local accumulated time
+                            // This ensures we don't lose time accumulated on frontend
+                            const serverAccumulated = data.accumulated_seconds || 0;
+                            baseAccumulatedSeconds = Math.max(baseAccumulatedSeconds, serverAccumulated);
+
                             currentStatus = data.current_status || 'Ready';
 
                             // If status changed, handle it
                             if (previousStatus !== currentStatus) {
                                 console.log('Status changed from', previousStatus, 'to', currentStatus);
+
+                                // Update status badge
+                                updateStatusBadge(currentStatus);
 
                                 // If status changed to Running, reset running start time
                                 if (currentStatus === 'Running' && previousStatus !== 'Running') {
@@ -919,6 +743,51 @@
                     .catch(error => console.error('Error syncing timer:', error));
             }
 
+            // Function to update status badge
+            function updateStatusBadge(status) {
+                const statusBadge = document.getElementById('statusBadge');
+                if (!statusBadge) return;
+
+                // Remove all existing classes
+                statusBadge.className = 'bg-gradient-to-r px-3 py-1.5 rounded-lg shadow-xl';
+
+                // Normalize status for comparison
+                const normalizedStatus = String(status).trim().toLowerCase();
+
+                // Add status-specific classes
+                const statusConfig = {
+                    'running': {
+                        gradient: 'from-green-500 to-emerald-400',
+                        text: 'RUN'
+                    },
+                    'stopped': {
+                        gradient: 'from-gray-600 to-slate-700',
+                        text: 'STOP'
+                    },
+                    'stop': {
+                        gradient: 'from-gray-600 to-slate-700',
+                        text: 'STOP'
+                    },
+                    'ready': {
+                        gradient: 'from-blue-500 to-cyan-400',
+                        text: 'READY'
+                    },
+                    'downtime': {
+                        gradient: 'from-red-500 to-rose-400',
+                        text: 'DOWNTIME'
+                    },
+                    'paused': {
+                        gradient: 'from-blue-500 to-blue-600',
+                        text: 'PAUSED'
+                    }
+                };
+
+                const config = statusConfig[normalizedStatus] || statusConfig['ready'];
+                statusBadge.classList.add(config.gradient);
+                statusBadge.innerHTML =
+                    `<div class="text-lg font-black text-white tracking-widest">${config.text}</div>`;
+            }
+
             // Function to update status and timer state
             window.updateTimerStatus = function(newStatus) {
                 const now = Date.now();
@@ -932,15 +801,22 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                baseAccumulatedSeconds = data.accumulated_seconds || 0;
+                                // Use the maximum of server time and local accumulated time
+                                // This ensures we don't lose time if frontend has more accumulated
+                                const serverAccumulated = data.accumulated_seconds || 0;
+                                baseAccumulatedSeconds = Math.max(baseAccumulatedSeconds,
+                                    serverAccumulated);
+
                                 runningStartTime = now;
                                 lastServerSync = now;
-                                console.log('Timer started. Base:', data.formatted_time);
+                                console.log('Timer started. Base:', data.formatted_time,
+                                    'Local accumulated:', baseAccumulatedSeconds);
                                 updateProductionTimer(); // Update display immediately
                             }
                         })
                         .catch(error => {
                             console.error('Error fetching timer on status change:', error);
+                            // Keep local accumulated time, just start running
                             runningStartTime = now;
                             updateProductionTimer();
                         });
@@ -958,6 +834,8 @@
                 }
 
                 currentStatus = newStatus;
+                updateStatusBadge(newStatus); // Update status badge
+                console.log('Status updated to:', newStatus);
             };
 
             // Fetch accumulated running time from server on load
@@ -968,6 +846,9 @@
                         if (data.success) {
                             baseAccumulatedSeconds = data.accumulated_seconds || 0;
                             currentStatus = data.current_status || 'Ready';
+
+                            // Update status badge on load
+                            updateStatusBadge(currentStatus);
 
                             if (currentStatus === 'Running') {
                                 runningStartTime = Date.now();
