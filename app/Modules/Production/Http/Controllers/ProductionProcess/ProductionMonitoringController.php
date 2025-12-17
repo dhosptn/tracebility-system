@@ -11,6 +11,7 @@ use App\Modules\MasterData\Models\MUser;
 use App\Modules\Production\Services\OeeCalculationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class ProductionMonitoringController extends Controller
 {
@@ -327,7 +328,9 @@ class ProductionMonitoringController extends Controller
     ]);
 
     $nowIndonesia = now('Asia/Jakarta');
+    $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
+    // Save Downtime Record
     \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
       'monitoring_id' => $id,
       'downtime_type' => $request->downtime_type,
@@ -336,6 +339,40 @@ class ProductionMonitoringController extends Controller
       'notes' => $request->notes,
       'created_at' => $nowIndonesia
     ]);
+
+    // FORCE STATUS UPDATE TO DOWNTIME (if not already)
+    if ($monitoring->current_status !== 'Downtime') {
+      // Close previous log
+      $lastLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
+
+      if ($lastLog) {
+        $lastLog->update([
+          'end_time' => $nowIndonesia,
+          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
+        ]);
+      }
+
+      // Create new 'Downtime' status log
+      \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::create([
+        'monitoring_id' => $id,
+        'status' => 'Downtime',
+        'start_time' => $nowIndonesia,
+        'created_at' => $nowIndonesia
+      ]);
+
+      // Update monitoring status
+      $monitoring->update([
+        'current_status' => 'Downtime',
+        'updated_at' => $nowIndonesia
+      ]);
+      
+      // Clear checking cache to update frontend immediately
+      Cache::forget("mqtt_status_signal_{$id}"); 
+      Cache::put("mqtt_status_signal_{$id}", ['show' => true, 'status' => 'Downtime'], 10);
+    }
 
     return response()->json([
       'success' => true,
@@ -389,31 +426,59 @@ class ProductionMonitoringController extends Controller
       Cache::forget($cacheKey);
       return response()->json([
         'show' => $signal['show'] ?? false,
-        'qty' => $signal['qty'] ?? 1
+        'qty' => $signal['qty'] ?? 1,
+        'ng_type' => $signal['ng_type'] ?? null,
+        'ng_reason' => $signal['ng_reason'] ?? null,
+        'qty_ng' => $signal['qty_ng'] ?? null,
+        'qty_actual' => $signal['qty_actual'] ?? null,
+        'auto_saved' => $signal['auto_saved'] ?? false,
+        'timestamp' => $signal['timestamp'] ?? null
       ]);
     }
 
     return response()->json([
       'show' => false,
-      'qty' => 1
+      'qty' => 1,
+      'qty_ng' => null,
+      'qty_actual' => null
     ]);
   }
 
   public function checkMqttDowntimeSignal($id)
   {
-    $cacheKey = "mqtt_show_downtime_form_{$id}";
+    $cacheKey = "mqtt_downtime_signal_{$id}";
     $signal = Cache::get($cacheKey);
 
     if ($signal) {
       // Remove the signal after retrieving it
       Cache::forget($cacheKey);
       return response()->json([
-        'show' => true
+        'show' => $signal['show'] ?? false,
+        'downtime_type' => $signal['downtime_type'] ?? null,
+        'downtime_reason' => $signal['downtime_reason'] ?? null,
+        'auto_saved' => $signal['auto_saved'] ?? false,
+        'timestamp' => $signal['timestamp'] ?? null
+      ]);
+    }
+
+    // Check for status-triggered downtime form (from status=Downtime signal)
+    $formCacheKey = "mqtt_show_downtime_form_{$id}";
+    $showForm = Cache::get($formCacheKey);
+
+    if ($showForm) {
+      Cache::forget($formCacheKey);
+      return response()->json([
+        'show' => true,
+        'downtime_type' => null,
+        'downtime_reason' => null,
+        'auto_saved' => false
       ]);
     }
 
     return response()->json([
-      'show' => false
+      'show' => false,
+      'downtime_type' => null,
+      'downtime_reason' => null
     ]);
   }
 

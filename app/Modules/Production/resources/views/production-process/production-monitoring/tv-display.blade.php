@@ -406,7 +406,7 @@
                 <div class="timeline-content">
                     <div class="flex-1 flex flex-col gap-2">
                         <div
-                            class="relative h-8 bg-slate-700/30 rounded-lg border border-slate-600/50 overflow-hidden shadow-inner">
+                            class="relative h-6 bg-slate-700/30 rounded-lg border border-slate-600/50 overflow-hidden shadow-inner">
                             <div id="timelineVisual" class="absolute inset-0 flex">
                                 <div class="bg-green-500" style="width: 40%"></div>
                                 <div class="bg-red-500" style="width: 15%"></div>
@@ -540,8 +540,7 @@
                     <button type="button" onclick="closeDowntimeModal()"
                         class="flex-1 bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 rounded transition-colors text-sm">Cancel</button>
                     <button type="submit"
-                        class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 rounded transition-colors text-sm">Save
-                        Downtime</button>
+                        class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 rounded transition-colors text-sm">Save Downtime</button>
                 </div>
             </form>
         </div>
@@ -580,303 +579,17 @@
                     qty_ng: {{ $monitoring->qty_ng }},
                     qty_ok: {{ $monitoring->qty_ok }},
                     wo_qty: {{ $monitoring->wo_qty }},
-                    cycle_time: {{ $monitoring->cycle_time }}
+                    cycle_time: {{ $monitoring->cycle_time }},
+                    current_status: '{{ $monitoring->current_status ?? "Ready" }}'
                 });
             }
 
-            // Timer state management - CURRENT STATUS DURATION ONLY
-            let currentStatus = '{{ $monitoring->current_status }}';
-            let currentStatusStartTime = null; // When current status started
-            let lastServerSync = 0; // Last time we synced with server
-
-            // Update clock and timer every second
-            function updateClockAndTimer() {
-                const now = new Date();
-
-                // Update clock
-                const timeString = now.toLocaleTimeString('en-US', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-                const dateString = now.toLocaleDateString('en-US', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric'
-                });
-
-                document.getElementById('clock').textContent = timeString;
-                document.getElementById('date').textContent = dateString;
-
-                // Update current status timer
-                updateCurrentStatusTimer();
-            }
-
-            function updateCurrentStatusTimer() {
-                let displaySeconds = 0;
-
-                // Calculate duration of CURRENT STATUS ONLY
-                if (currentStatusStartTime) {
-                    const now = Date.now();
-                    const currentStatusDuration = Math.floor((now - currentStatusStartTime) / 1000);
-                    displaySeconds = Math.max(0, currentStatusDuration);
-                }
-
-                // Convert to HH:MM:SS
-                const totalSeconds = Math.floor(displaySeconds);
-                const hours = Math.floor(totalSeconds / 3600);
-                const minutes = Math.floor((totalSeconds % 3600) / 60);
-                const seconds = Math.floor(totalSeconds % 60);
-
-                const timerString =
-                    String(hours).padStart(2, '0') + ':' +
-                    String(minutes).padStart(2, '0') + ':' +
-                    String(seconds).padStart(2, '0');
-
-                document.getElementById('currentTimer').textContent = timerString;
-
-                // Check if production is finished
-                checkProductionFinish();
-            }
-
-            // Check if production is finished (qty_ok >= wo_qty)
-            function checkProductionFinish() {
-                const actualQtyElement = document.getElementById('actualQty');
-                const targetQtyElement = document.getElementById('targetQty');
-                const currentTimerElement = document.getElementById('currentTimer');
-                const currentTimerLabel = document.querySelector('[id="currentTimer"]').parentElement.querySelector(
-                    'div:first-child');
-
-                if (!actualQtyElement || !targetQtyElement) return;
-
-                const actualQty = parseInt(actualQtyElement.textContent) || 0;
-                const targetQty = parseInt(targetQtyElement.textContent) || 0;
-
-                // Check if finished
-                if (actualQty >= targetQty && targetQty > 0) {
-                    // Change label to FINISH
-                    if (currentTimerLabel) {
-                        currentTimerLabel.textContent = 'FINISH';
-                        currentTimerLabel.classList.add('text-green-400');
-                        currentTimerLabel.classList.remove('text-white');
-                    }
-
-                    // Stop timer if still running
-                    if (currentStatus === 'Running') {
-                        runningStartTime = null;
-                        console.log('Production finished! Qty reached target.');
-                    }
-
-                    // Change background color to green
-                    currentTimerElement.parentElement.classList.remove('from-blue-600', 'to-blue-700');
-                    currentTimerElement.parentElement.classList.add('from-green-600', 'to-green-700');
-                } else {
-                    // Reset to CURRENT TIME if not finished
-                    if (currentTimerLabel && currentTimerLabel.textContent === 'FINISH') {
-                        currentTimerLabel.textContent = 'CURRENT TIME';
-                        currentTimerLabel.classList.remove('text-green-400');
-                        currentTimerLabel.classList.add('text-white');
-
-                        // Reset background color
-                        currentTimerElement.parentElement.classList.remove('from-green-600', 'to-green-700');
-                        currentTimerElement.parentElement.classList.add('from-blue-600', 'to-blue-700');
-                    }
-                }
-            }
-
-            // Expose checkProductionFinish to global scope for tv-display.js
-            window.checkProductionFinish = checkProductionFinish;
-
-            // Update status badge display
-            function updateStatusBadge(status) {
-                const statusBadge = document.getElementById('statusBadge');
-                if (!statusBadge) return;
-
-                // Remove all status classes
-                statusBadge.className = 'px-3 py-1.5 rounded-lg shadow-xl';
-
-                // Add appropriate classes based on status
-                switch (status) {
-                    case 'Running':
-                        statusBadge.classList.add('bg-gradient-to-r', 'from-green-500', 'to-emerald-400');
-                        statusBadge.innerHTML =
-                            '<div class="text-lg font-black text-white tracking-widest">RUN</div>';
-                        break;
-                    case 'Ready':
-                        statusBadge.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-400');
-                        statusBadge.innerHTML =
-                            '<div class="text-lg font-black text-white tracking-widest">READY</div>';
-                        break;
-                    case 'Downtime':
-                        statusBadge.classList.add('bg-gradient-to-r', 'from-red-500', 'to-red-400');
-                        statusBadge.innerHTML =
-                            '<div class="text-lg font-black text-white tracking-widest">DOWN</div>';
-                        break;
-                    case 'Stop':
-                        statusBadge.classList.add('bg-gradient-to-r', 'from-gray-500', 'to-gray-400');
-                        statusBadge.innerHTML =
-                            '<div class="text-lg font-black text-white tracking-widest">STOP</div>';
-                        break;
-                    default:
-                        statusBadge.classList.add('bg-gradient-to-r', 'from-gray-500', 'to-gray-400');
-                        statusBadge.innerHTML = '<div class="text-lg font-black text-white tracking-widest">' +
-                            status.toUpperCase() + '</div>';
-                }
-            }
-
-            // Sync status with server every 1 second for faster detection
-            function syncStatusWithServer() {
-                const now = Date.now();
-                // Sync every 1 second for faster detection
-                if (now - lastServerSync < 1000) {
-                    return;
-                }
-
-                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-current-status`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            lastServerSync = now;
-                            const previousStatus = currentStatus;
-                            const newStatus = data.current_status || 'Ready';
-
-                            // If status changed, RESET timer IMMEDIATELY
-                            if (previousStatus !== newStatus) {
-                                console.log('Status changed from', previousStatus, 'to', newStatus);
-
-                                // IMMEDIATE RESET: New status starts timer from 00:00:00
-                                currentStatus = newStatus;
-                                currentStatusStartTime = now;
-
-                                // Force immediate display update to 00:00:00
-                                document.getElementById('currentTimer').textContent = '00:00:00';
-
-                                console.log('Timer IMMEDIATELY RESET for new status:', newStatus);
-
-                                // Update status badge
-                                updateStatusBadge(newStatus);
-                            }
-
-                            console.log('Status synced:', currentStatus);
-                            updateCurrentStatusTimer(); // Update display after sync
-                        }
-                    })
-                    .catch(error => console.error('Error syncing status:', error));
-            }
-
-            // Function to update status - RESETS timer for new status
-            window.updateTimerStatus = function(newStatus) {
-                const now = Date.now();
-
-                // If status is changing, RESET timer to 00:00:00 for new status
-                if (currentStatus !== newStatus) {
-                    console.log('Status changing from', currentStatus, 'to', newStatus);
-
-                    // IMMEDIATE RESET: New status starts timer from 00:00:00
-                    currentStatus = newStatus;
-                    currentStatusStartTime = now;
-
-                    // Force immediate display update to 00:00:00
-                    document.getElementById('currentTimer').textContent = '00:00:00';
-
-                    console.log('Timer IMMEDIATELY RESET for new status:', newStatus);
-
-                    // Update status badge
-                    updateStatusBadge(newStatus);
-
-                    updateCurrentStatusTimer(); // Update display immediately
-                }
-            };
-
-            // Force reset timer to 00:00:00 immediately
-            function forceResetTimer() {
-                document.getElementById('currentTimer').textContent = '00:00:00';
-                currentStatusStartTime = Date.now();
-                console.log('Timer force reset to 00:00:00');
-            }
-
-            // Expose forceResetTimer to global scope for external calls
-            window.forceResetTimer = forceResetTimer;
-
-            // Fetch current status and start timer for current status
-            function fetchCurrentStatus() {
-                fetch(`/production/production-monitoring/{{ $monitoring->monitoring_id }}/get-current-status`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            currentStatus = data.current_status || 'Ready';
-
-                            // Start timer for current status from now
-                            currentStatusStartTime = Date.now();
-                            lastServerSync = Date.now();
-
-                            console.log('Loaded - Current Status:', currentStatus,
-                                'Timer started from 00:00:00');
-
-                            // Update status badge
-                            updateStatusBadge(currentStatus);
-                            updateCurrentStatusTimer(); // Update display immediately
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching current status:', error);
-                        // Fallback: start timer from now
-                        currentStatusStartTime = Date.now();
-                        updateCurrentStatusTimer(); // Update display even on error
-                    });
-            }
-
-            // Initialize MQTT handler if available
-            let mqttHandler = null;
+            // Initialize MQTT handler if available (kept for backend socket integration)
             if (typeof MqttProductionHandler !== 'undefined') {
-                mqttHandler = new MqttProductionHandler({{ $monitoring->monitoring_id }});
+                const mqttHandler = new MqttProductionHandler({{ $monitoring->monitoring_id }});
                 mqttHandler.start();
-                console.log('MQTT handler initialized for timer reset support');
+                console.log('MQTT handler initialized');
             }
-
-            // Initialize timer
-            fetchCurrentStatus();
-
-            // Update display every second
-            setInterval(updateClockAndTimer, 1000);
-            updateClockAndTimer();
-
-            // Sync with server every 1 second to quickly detect MQTT changes
-            setInterval(syncStatusWithServer, 1000);
-
-            // Adjust layout for timeline
-            function adjustTimelineLayout() {
-                const timelineContainer = document.querySelector('.timeline-container');
-                const timelineContent = document.querySelector('.timeline-content');
-
-                if (timelineContainer && timelineContent) {
-                    const containerHeight = timelineContainer.offsetHeight;
-                    const contentHeight = timelineContent.scrollHeight;
-
-                    if (contentHeight > containerHeight) {
-                        // Reduce legend font size
-                        document.querySelectorAll('.timeline-legend .text-sm').forEach(el => {
-                            el.classList.remove('text-sm');
-                            el.classList.add('text-xs');
-                        });
-
-                        // Reduce timeline height
-                        const timelineBar = document.querySelector('.timeline-content .h-8');
-                        if (timelineBar) {
-                            timelineBar.classList.remove('h-8');
-                            timelineBar.classList.add('h-6');
-                        }
-                    }
-                }
-            }
-
-            // Adjust layout on resize
-            window.addEventListener('resize', adjustTimelineLayout);
-            setTimeout(adjustTimelineLayout, 100);
-
-            // Ensure timeline has minimum height
-            document.querySelector('.timeline-container').style.minHeight = '140px';
         });
     </script>
 </body>

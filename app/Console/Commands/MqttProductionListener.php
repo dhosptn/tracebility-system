@@ -272,6 +272,13 @@ class MqttProductionListener extends Command
         return;
       }
 
+      // VALIDATION: Only accept qty_ok when status is Running
+      if ($monitoring->current_status !== 'Running') {
+        $this->warn("⚠ QTY OK signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}', not 'Running'");
+        Log::warning("MQTT QTY OK REJECTED: Monitoring {$monitoringId}, Current Status: {$monitoring->current_status}");
+        return;
+      }
+
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
 
@@ -300,22 +307,50 @@ class MqttProductionListener extends Command
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
       if (!$monitoring) {
+        $this->error("DEBUG: Monitoring ID {$monitoringId} not found for NG update");
         return;
       }
 
-      // Signal frontend to show NG form
+      // VALIDATION: Only accept NG when status is Running
+      if ($monitoring->current_status !== 'Running') {
+        $this->warn("⚠ NG signal REJECTED for monitoring {$monitoringId}: Status is '{$monitoring->current_status}', not 'Running'");
+        Log::warning("MQTT NG REJECTED: Monitoring {$monitoringId}, Current Status: {$monitoring->current_status}");
+        return;
+      }
+
+      $nowIndonesia = now('Asia/Jakarta');
+
+      // DIRECTLY UPDATE DATABASE - Create NG record
+      \App\Modules\Production\Models\ProductionProcess\ProductionNg::create([
+        'monitoring_id' => $monitoringId,
+        'ng_type' => $ngType,
+        'ng_reason' => $ngReason,
+        'qty' => $qty,
+        'notes' => 'Auto-created from MQTT signal',
+        'created_at' => $nowIndonesia
+      ]);
+
+      // Update monitoring quantities
+      $monitoring->increment('qty_ng', $qty);
+      $monitoring->increment('qty_actual', $qty);
+
+      // Signal frontend for real-time update AND show modal for confirmation
       Cache::put("mqtt_ng_signal_{$monitoringId}", [
-        'show' => true,
+        'show' => true, // Show modal for user confirmation/review
         'qty' => $qty,
         'ng_type' => $ngType,
         'ng_reason' => $ngReason,
-        'timestamp' => now('Asia/Jakarta')->toIso8601String()
-      ], 300);
+        'qty_ng' => $monitoring->qty_ng,
+        'qty_actual' => $monitoring->qty_actual,
+        'auto_saved' => true, // Indicate it's already saved to DB
+        'timestamp' => $nowIndonesia->toIso8601String()
+      ], 60);
 
-      $this->info("✓ NG signal received for monitoring {$monitoringId}: qty {$qty}");
-      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Type: {$ngType}");
+      $this->info("✓ NG updated DIRECTLY to database for monitoring {$monitoringId}: qty {$qty}, type: {$ngType}");
+      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Type: {$ngType} - SAVED TO DATABASE");
     } catch (\Exception $e) {
       Log::error('Error handling NG update: ' . $e->getMessage());
+      $this->error("ERROR handling NG: " . $e->getMessage());
     }
   }
 
@@ -327,21 +362,42 @@ class MqttProductionListener extends Command
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
       if (!$monitoring) {
+        $this->error("DEBUG: Monitoring ID {$monitoringId} not found for downtime update");
         return;
       }
 
-      // Signal frontend to show downtime form
-      Cache::put("mqtt_downtime_signal_{$monitoringId}", [
-        'show' => true,
+      $nowIndonesia = now('Asia/Jakarta');
+
+      // DIRECTLY UPDATE DATABASE - Create downtime record
+      \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
+        'monitoring_id' => $monitoringId,
         'downtime_type' => $downtimeType,
         'downtime_reason' => $downtimeReason,
-        'timestamp' => now('Asia/Jakarta')->toIso8601String()
-      ], 300);
+        'start_time' => $nowIndonesia,
+        'notes' => 'Auto-created from MQTT signal',
+        'created_at' => $nowIndonesia
+      ]);
 
-      $this->info("✓ Downtime signal received for monitoring {$monitoringId}");
-      Log::info("MQTT Downtime: Monitoring {$monitoringId}, Type: {$downtimeType}");
+      // FORCE UPDATE STATUS TO DOWNTIME
+      if ($monitoring->current_status !== 'Downtime') {
+        $this->handleStatusUpdate($monitoringId, 'Downtime', $time);
+        $this->info("✓ Auto-updated status to Downtime for monitoring {$monitoringId}");
+      }
+
+      // Signal frontend for real-time update AND show modal for confirmation
+      Cache::put("mqtt_downtime_signal_{$monitoringId}", [
+        'show' => true, // Show modal for user confirmation/review
+        'downtime_type' => $downtimeType,
+        'downtime_reason' => $downtimeReason,
+        'auto_saved' => true, // Indicate it's already saved to DB
+        'timestamp' => $nowIndonesia->toIso8601String()
+      ], 60);
+
+      $this->info("✓ Downtime updated DIRECTLY to database for monitoring {$monitoringId}: {$downtimeType}");
+      Log::info("MQTT Downtime: Monitoring {$monitoringId}, Type: {$downtimeType} - SAVED TO DATABASE");
     } catch (\Exception $e) {
       Log::error('Error handling downtime update: ' . $e->getMessage());
+      $this->error("ERROR handling downtime: " . $e->getMessage());
     }
   }
 
