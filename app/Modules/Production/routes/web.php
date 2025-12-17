@@ -37,6 +37,7 @@ Route::prefix('production')->name('production.')->group(function () {
     Route::get('production-monitoring/{id}/check-mqtt-ng-signal', [\App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class, 'checkMqttNgSignal'])->name('production-monitoring.check-mqtt-ng-signal');
     Route::get('production-monitoring/{id}/check-mqtt-downtime-signal', [\App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class, 'checkMqttDowntimeSignal'])->name('production-monitoring.check-mqtt-downtime-signal');
     Route::get('production-monitoring/{id}/check-mqtt-status-signal', [\App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class, 'checkMqttStatusSignal'])->name('production-monitoring.check-mqtt-status-signal');
+    Route::get('production-monitoring/{id}/get-running-time', [\App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class, 'getRunningTime'])->name('production-monitoring.get-running-time');
     Route::post('production-monitoring/{id}/send-mqtt-signal', [\App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class, 'sendMqttSignal'])->name('production-monitoring.send-mqtt-signal');
     Route::resource('production-monitoring', \App\Modules\Production\Http\Controllers\ProductionProcess\ProductionMonitoringController::class);
 });

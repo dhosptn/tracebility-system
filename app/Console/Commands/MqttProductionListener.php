@@ -214,12 +214,23 @@ class MqttProductionListener extends Command
         ->first();
 
       if ($lastLog) {
+        // Calculate duration in seconds - ensure positive integer
+        $durationSeconds = (int)max(0, floor(abs($nowIndonesia->diffInSeconds($lastLog->start_time))));
+
         $lastLog->update([
           'end_time' => $nowIndonesia,
-          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
+          'duration_seconds' => $durationSeconds
+        ]);
+
+        \Log::info("Status log closed", [
+          'monitoring_id' => $monitoringId,
+          'previous_status' => $lastLog->status,
+          'start_time' => $lastLog->start_time->toIso8601String(),
+          'end_time' => $nowIndonesia->toIso8601String(),
+          'duration_seconds' => $durationSeconds
         ]);
       }
-
+\ArrayIterator
       // Create new status log
       ProductionStatusLog::create([
         'monitoring_id' => $monitoringId,
@@ -434,9 +445,18 @@ class MqttProductionListener extends Command
         ->first();
 
       if ($lastLog) {
+        // Calculate duration in seconds - ensure positive integer
+        $durationSeconds = (int)max(0, floor(abs($nowIndonesia->diffInSeconds($lastLog->start_time))));
+        
         $lastLog->update([
           'end_time' => $nowIndonesia,
-          'duration_seconds' => $nowIndonesia->diffInSeconds($lastLog->start_time)
+          'duration_seconds' => $durationSeconds
+        ]);
+        
+        \Log::info("Status log closed (legacy handler)", [
+          'monitoring_id' => $monitoringId,
+          'previous_status' => $lastLog->status,
+          'duration_seconds' => $durationSeconds
         ]);
       }
 
@@ -450,7 +470,7 @@ class MqttProductionListener extends Command
 
       // Update monitoring status
       $monitoring->update([
-        'current_status' => $normalizedStatus,
+      tatus' => $normalizedStatus,
         'updated_at' => $nowIndonesia
       ]);
 

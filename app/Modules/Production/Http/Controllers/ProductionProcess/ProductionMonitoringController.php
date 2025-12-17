@@ -438,6 +438,73 @@ class ProductionMonitoringController extends Controller
   }
 
   /**
+   * Get accumulated running time for production monitoring
+   */
+  public function getRunningTime($id)
+  {
+    $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
+
+    // Calculate total running time from status logs
+    $runningLogs = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+      ->where('status', 'Running')
+      ->orderBy('start_time', 'asc')
+      ->get();
+
+    $totalRunningSeconds = 0;
+
+    foreach ($runningLogs as $log) {
+      if ($log->end_time) {
+        // Completed running period
+        $totalRunningSeconds += $log->duration_seconds ?? 0;
+      } else {
+        // Currently running - calculate from start_time to now
+        $startTime = $log->start_time;
+        $now = now('Asia/Jakarta');
+
+        // Calculate difference in seconds
+        $diffSeconds = $now->diffInSeconds($startTime);
+
+        // Use abs to handle any timezone issues
+        $diffSeconds = abs($diffSeconds);
+
+        // Ensure it's a positive integer
+        $diffSeconds = (int)max(0, floor($diffSeconds));
+
+        $totalRunningSeconds += $diffSeconds;
+
+        \Log::info("Running log calculation", [
+          'start_time' => $startTime->toIso8601String(),
+          'now' => $now->toIso8601String(),
+          'diff_seconds' => $diffSeconds,
+          'total_so_far' => $totalRunningSeconds
+        ]);
+      }
+    }
+
+    // Ensure total is non-negative integer
+    $totalRunningSeconds = (int)max(0, $totalRunningSeconds);
+
+    // Format seconds to HH:mm:ss - ensure non-negative values
+    $hours = (int)($totalRunningSeconds / 3600);
+    $minutes = (int)(($totalRunningSeconds % 3600) / 60);
+    $seconds = (int)($totalRunningSeconds % 60);
+
+    // Ensure all values are non-negative
+    $hours = max(0, $hours);
+    $minutes = max(0, $minutes);
+    $seconds = max(0, $seconds);
+
+    $formattedTime = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+
+    return response()->json([
+      'success' => true,
+      'accumulated_seconds' => $totalRunningSeconds,
+      'formatted_time' => $formattedTime,
+      'current_status' => $monitoring->current_status
+    ]);
+  }
+
+  /**
    * Send MQTT signal with unified payload format
    */
   public function sendMqttSignal(Request $request, $id)
