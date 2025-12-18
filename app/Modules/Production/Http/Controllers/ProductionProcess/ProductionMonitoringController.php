@@ -239,12 +239,20 @@ class ProductionMonitoringController extends Controller
       'timeline' => $timeline->toArray()
     ]);
 
+    // Get current status start time
+    $currentStatusLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
+    $statusStartTime = $currentStatusLog ? $currentStatusLog->start_time->toIso8601String() : null;
+
     return response()->json([
       'wo_qty' => $monitoring->wo_qty,
       'qty_actual' => $monitoring->qty_actual,
       'qty_ng' => $monitoring->qty_ng,
       'qty_ok' => $monitoring->qty_ok,
       'current_status' => $monitoring->current_status,
+      'current_status_start_time' => $statusStartTime,
       'oee' => $metrics['oee'],
       'availability' => $metrics['availability'],
       'performance' => $metrics['performance'],
@@ -517,9 +525,15 @@ class ProductionMonitoringController extends Controller
   {
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::findOrFail($id);
 
+    $currentStatusLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
+
     return response()->json([
       'success' => true,
-      'current_status' => $monitoring->current_status
+      'current_status' => $monitoring->current_status,
+      'current_status_start_time' => $currentStatusLog ? $currentStatusLog->start_time->toIso8601String() : null
     ]);
   }
 

@@ -134,9 +134,10 @@ function fetchCurrentStatus() {
         success: function(data) {
             if (data.success) {
                 const newStatus = data.current_status || 'Ready';
-                if (state.currentStatus !== newStatus) {
-                    console.log('Status changed (sync):', state.currentStatus, '->', newStatus);
-                    updateTimerStatus(newStatus);
+                const startTime = data.current_status_start_time;
+                if (state.currentStatus !== newStatus || startTime) {
+                    console.log('Status synced:', newStatus, 'StartTime:', startTime);
+                    updateTimerStatus(newStatus, startTime);
                 }
             }
         },
@@ -147,13 +148,20 @@ function fetchCurrentStatus() {
 }
 
 // Global function to update timer status (called by MQTT handler or internal sync)
-window.updateTimerStatus = function(newStatus) {
-    if (state.currentStatus !== newStatus) {
+window.updateTimerStatus = function(newStatus, startTime = null) {
+    if (state.currentStatus !== newStatus || startTime) {
         state.currentStatus = newStatus;
-        state.statusStartTime = Date.now();
+        
+        if (startTime) {
+            state.statusStartTime = new Date(startTime).getTime();
+            console.log('Timer SYNCED for status:', newStatus, 'StartTime:', startTime);
+        } else {
+            state.statusStartTime = Date.now();
+            console.log('Timer RESET for status:', newStatus);
+        }
+        
         $('#currentTimer').text('00:00:00');
         updateStatus(newStatus); // Update visual badge
-        console.log('Timer RESET for status:', newStatus);
     }
 };
 
@@ -381,9 +389,9 @@ function fetchData() {
             updateKpiWithAnimation('#progressPercent', progress + '%', false); 
             // Note: progressPercent might be text, so false for 'isNumber' animation
 
-            // Update Status (only if backend says so, but updateTimerStatus handles change)
-            if (data.current_status && state.currentStatus !== data.current_status) {
-                updateTimerStatus(data.current_status);
+            // Update Status
+            if (data.current_status) {
+                updateTimerStatus(data.current_status, data.current_status_start_time);
             }
 
             // OEE Metrics

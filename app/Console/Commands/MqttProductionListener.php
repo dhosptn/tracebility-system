@@ -56,6 +56,7 @@ class MqttProductionListener extends Command
     try {
       while (true) {
         $this->mqttService->loop(true);
+        $this->processPendingActions();
         usleep(100000); // 100ms delay
       }
     } catch (\Exception $e) {
@@ -63,6 +64,29 @@ class MqttProductionListener extends Command
       Log::error('MQTT Listener error: ' . $e->getMessage());
       return 1;
     }
+  }
+
+  protected $pendingActions = [];
+
+  protected function processPendingActions()
+  {
+      if (empty($this->pendingActions)) {
+          return;
+      }
+
+      $now = now('Asia/Jakarta');
+
+      foreach ($this->pendingActions as $key => $action) {
+          if ($now->gte($action['execute_at'])) {
+              $this->info("⏰ Executing delayed action for {$action['mesin']} at {$now->toTimeString()} (Scheduled: {$action['execute_at']->toTimeString()})");
+              
+              if ($action['type'] === 'unified') {
+                  $this->processUnifiedData($action['data']);
+              }
+
+              unset($this->pendingActions[$key]);
+          }
+      }
   }
 
   protected function subscribeToTopics()
@@ -106,11 +130,47 @@ class MqttProductionListener extends Command
         return;
       }
 
+      // Check for future time
+      $time = $data['time'] ?? null;
+      if ($time) {
+          $nowIndonesia = now('Asia/Jakarta');
+          // Assume time is for TODAY.
+          $payloadTime = \Carbon\Carbon::parse($nowIndonesia->format('Y-m-d') . ' ' . $time, 'Asia/Jakarta');
+          
+          if ($nowIndonesia->lt($payloadTime)) {
+             $mesin = $data['mesin'] ?? $data['machine_code'] ?? 'Unknown';
+             $this->info("⏳ Delaying signal for {$mesin} until {$payloadTime->toTimeString()} (Current: {$nowIndonesia->toTimeString()})");
+             
+             $this->pendingActions[] = [
+                 'execute_at' => $payloadTime,
+                 'type' => 'unified',
+                 'data' => $data,
+                 'mesin' => $mesin
+             ];
+             return;
+          }
+      }
+
+      $this->processUnifiedData($data);
+
+    } catch (\Exception $e) {
+      Log::error('Error handling unified signal: ' . $e->getMessage());
+      $this->error("ERROR: " . $e->getMessage());
+    }
+  }
+
+  protected function processUnifiedData($data)
+  {
       $trxType = $data['trx_type'] ?? null;
       $mesin = $data['mesin'] ?? $data['machine_code'] ?? null;
-      $time = $data['time'] ?? now('Asia/Jakarta')->format('H:i:s');
+      
+      // Parse timestamp
+      $nowIndonesia = now('Asia/Jakarta');
+      $effectiveTime = isset($data['time']) 
+          ? \Carbon\Carbon::parse($nowIndonesia->format('Y-m-d') . ' ' . $data['time'], 'Asia/Jakarta')
+          : $nowIndonesia;
 
-      $this->info("DEBUG: Parsed - trx_type: {$trxType}, mesin: {$mesin}, time: {$time}");
+      $this->info("DEBUG: Processing - trx_type: {$trxType}, mesin: {$mesin}, time: {$effectiveTime->toTimeString()}");
 
       if (!$trxType) {
         Log::warning('Unified Signal: trx_type not provided');
@@ -130,36 +190,32 @@ class MqttProductionListener extends Command
         case 'status':
           $status = $data['status'] ?? null;
           if ($status) {
-            $this->handleStatusUpdate($monitoringId, $status, $time);
+            $this->handleStatusUpdate($monitoringId, $status, $effectiveTime);
           }
           break;
 
         case 'qty_ok':
           $qty = $data['qty'] ?? 1;
-          $this->handleQtyOkUpdate($monitoringId, $qty, $time);
+          $this->handleQtyOkUpdate($monitoringId, $qty, $effectiveTime);
           break;
 
         case 'ng':
           $qty = $data['qty'] ?? 1;
           $ngType = $data['ng_type'] ?? 'Unknown';
           $ngReason = $data['ng_reason'] ?? 'From MQTT';
-          $this->handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $time);
+          $this->handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $effectiveTime);
           break;
 
         case 'downtime':
           $downtimeType = $data['downtime_type'] ?? 'Unknown';
           $downtimeReason = $data['downtime_reason'] ?? 'From MQTT';
-          $this->handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $time);
+          $this->handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $effectiveTime);
           break;
 
         default:
           Log::warning("Unified Signal: Unknown trx_type: {$trxType}");
           $this->error("DEBUG: Unknown trx_type: {$trxType}");
       }
-    } catch (\Exception $e) {
-      Log::error('Error handling unified signal: ' . $e->getMessage());
-      $this->error("ERROR: " . $e->getMessage());
-    }
   }
 
   /**
@@ -185,7 +241,7 @@ class MqttProductionListener extends Command
   /**
    * Handle status update from unified signal
    */
-  protected function handleStatusUpdate($monitoringId, $status, $time = null)
+  protected function handleStatusUpdate($monitoringId, $status, $timestamp = null)
   {
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
@@ -201,11 +257,16 @@ class MqttProductionListener extends Command
         'Stopped' => 'Stopped',
         'Ready' => 'Ready',
         'Paused' => 'Paused',
-        'Downtime' => 'Downtime'
+        'Downtime' => 'Downtime',
+        'Start' => 'Running',
+        'START' => 'Running'
       ];
 
       $normalizedStatus = $statusMap[$status] ?? $status;
-      $nowIndonesia = now('Asia/Jakarta');
+      $this->info("DEBUG: Normalized status: {$status} -> {$normalizedStatus}");
+      
+      // Use provided timestamp if available, otherwise use now()
+      $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
 
       // Close previous status log
       $lastLog = ProductionStatusLog::where('monitoring_id', $monitoringId)
@@ -215,33 +276,34 @@ class MqttProductionListener extends Command
 
       if ($lastLog) {
         // Calculate duration in seconds - ensure positive integer
-        $durationSeconds = (int)max(0, floor(abs($nowIndonesia->diffInSeconds($lastLog->start_time))));
+        $durationSeconds = (int)max(0, floor(abs($effectiveTime->diffInSeconds($lastLog->start_time))));
 
         $lastLog->update([
-          'end_time' => $nowIndonesia,
+          'end_time' => $effectiveTime,
           'duration_seconds' => $durationSeconds
         ]);
 
-        \Log::info("Status log closed", [
+        Log::info("Status log closed", [
           'monitoring_id' => $monitoringId,
           'previous_status' => $lastLog->status,
           'start_time' => $lastLog->start_time->toIso8601String(),
-          'end_time' => $nowIndonesia->toIso8601String(),
+          'end_time' => $effectiveTime->toIso8601String(),
           'duration_seconds' => $durationSeconds
         ]);
       }
+      
       // Create new status log
       ProductionStatusLog::create([
         'monitoring_id' => $monitoringId,
         'status' => $normalizedStatus,
-        'start_time' => $nowIndonesia,
-        'created_at' => $nowIndonesia
+        'start_time' => $effectiveTime,
+        'created_at' => $effectiveTime
       ]);
 
       // Update monitoring status
       $monitoring->update([
         'current_status' => $normalizedStatus,
-        'updated_at' => $nowIndonesia
+        'updated_at' => $effectiveTime
       ]);
 
       // Signal frontend
@@ -251,11 +313,11 @@ class MqttProductionListener extends Command
 
       Cache::put("mqtt_status_signal_{$monitoringId}", [
         'status' => $normalizedStatus,
-        'timestamp' => $nowIndonesia->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus}");
-      Log::info("MQTT Status: Monitoring {$monitoringId}, Status: {$normalizedStatus}");
+      $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus} (Time: {$effectiveTime->toDateTimeString()})");
+      Log::info("MQTT Status: Monitoring {$monitoringId}, Status: {$normalizedStatus}, Effective Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling status update: ' . $e->getMessage());
     }
@@ -264,7 +326,7 @@ class MqttProductionListener extends Command
   /**
    * Handle qty OK update from unified signal
    */
-  protected function handleQtyOkUpdate($monitoringId, $qty, $time = null)
+  protected function handleQtyOkUpdate($monitoringId, $qty, $timestamp = null)
   {
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
@@ -280,21 +342,23 @@ class MqttProductionListener extends Command
         return;
       }
 
+      $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
+
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
 
       // Record OK timestamp for cycle time calculation
-      $this->recordOkTimestamp($monitoringId);
+      $this->recordOkTimestamp($monitoringId, $effectiveTime);
 
       // Broadcast to frontend
       Cache::put("mqtt_qty_ok_{$monitoringId}", [
         'qty_ok' => $monitoring->qty_ok,
         'qty_actual' => $monitoring->qty_actual,
-        'timestamp' => now('Asia/Jakarta')->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty}");
-      Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}");
+      $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty} (Time: {$effectiveTime->toTimeString()})");
+      Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}, Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling qty OK update: ' . $e->getMessage());
     }
@@ -303,7 +367,7 @@ class MqttProductionListener extends Command
   /**
    * Handle NG update from unified signal
    */
-  protected function handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $time = null)
+  protected function handleNgUpdate($monitoringId, $qty, $ngType, $ngReason, $timestamp = null)
   {
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
@@ -320,7 +384,7 @@ class MqttProductionListener extends Command
         return;
       }
 
-      $nowIndonesia = now('Asia/Jakarta');
+      $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
 
       // DIRECTLY UPDATE DATABASE - Create NG record
       \App\Modules\Production\Models\ProductionProcess\ProductionNg::create([
@@ -329,7 +393,7 @@ class MqttProductionListener extends Command
         'ng_reason' => $ngReason,
         'qty' => $qty,
         'notes' => 'Auto-created from MQTT signal',
-        'created_at' => $nowIndonesia
+        'created_at' => $effectiveTime
       ]);
 
       // Update monitoring quantities
@@ -345,11 +409,11 @@ class MqttProductionListener extends Command
         'qty_ng' => $monitoring->qty_ng,
         'qty_actual' => $monitoring->qty_actual,
         'auto_saved' => true, // Indicate it's already saved to DB
-        'timestamp' => $nowIndonesia->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ NG updated DIRECTLY to database for monitoring {$monitoringId}: qty {$qty}, type: {$ngType}");
-      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Type: {$ngType} - SAVED TO DATABASE");
+      $this->info("✓ NG updated DIRECTLY to database for monitoring {$monitoringId}: qty {$qty}, type: {$ngType} (Time: {$effectiveTime->toTimeString()})");
+      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Type: {$ngType}, Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling NG update: ' . $e->getMessage());
       $this->error("ERROR handling NG: " . $e->getMessage());
@@ -359,7 +423,7 @@ class MqttProductionListener extends Command
   /**
    * Handle downtime update from unified signal
    */
-  protected function handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $time = null)
+  protected function handleDowntimeUpdate($monitoringId, $downtimeType, $downtimeReason, $timestamp = null)
   {
     try {
       $monitoring = ProductionMonitoring::find($monitoringId);
@@ -368,21 +432,21 @@ class MqttProductionListener extends Command
         return;
       }
 
-      $nowIndonesia = now('Asia/Jakarta');
+      $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
 
       // DIRECTLY UPDATE DATABASE - Create downtime record
       \App\Modules\Production\Models\ProductionProcess\ProductionDowntime::create([
         'monitoring_id' => $monitoringId,
         'downtime_type' => $downtimeType,
         'downtime_reason' => $downtimeReason,
-        'start_time' => $nowIndonesia,
+        'start_time' => $effectiveTime,
         'notes' => 'Auto-created from MQTT signal',
-        'created_at' => $nowIndonesia
+        'created_at' => $effectiveTime
       ]);
 
       // FORCE UPDATE STATUS TO DOWNTIME
       if ($monitoring->current_status !== 'Downtime') {
-        $this->handleStatusUpdate($monitoringId, 'Downtime', $time);
+        $this->handleStatusUpdate($monitoringId, 'Downtime', $effectiveTime);
         $this->info("✓ Auto-updated status to Downtime for monitoring {$monitoringId}");
       }
 
@@ -392,11 +456,11 @@ class MqttProductionListener extends Command
         'downtime_type' => $downtimeType,
         'downtime_reason' => $downtimeReason,
         'auto_saved' => true, // Indicate it's already saved to DB
-        'timestamp' => $nowIndonesia->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ Downtime updated DIRECTLY to database for monitoring {$monitoringId}: {$downtimeType}");
-      Log::info("MQTT Downtime: Monitoring {$monitoringId}, Type: {$downtimeType} - SAVED TO DATABASE");
+      $this->info("✓ Downtime updated DIRECTLY to database for monitoring {$monitoringId}: {$downtimeType} (Time: {$effectiveTime->toTimeString()})");
+      Log::info("MQTT Downtime: Monitoring {$monitoringId}, Type: {$downtimeType}, Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling downtime update: ' . $e->getMessage());
       $this->error("ERROR handling downtime: " . $e->getMessage());
@@ -437,18 +501,22 @@ class MqttProductionListener extends Command
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
 
+      $effectiveTime = isset($data['time']) 
+          ? \Carbon\Carbon::parse(now('Asia/Jakarta')->format('Y-m-d') . ' ' . $data['time'], 'Asia/Jakarta')
+          : now('Asia/Jakarta');
+
       // Record OK timestamp for cycle time calculation
-      $this->recordOkTimestamp($monitoringId);
+      $this->recordOkTimestamp($monitoringId, $effectiveTime);
 
       // Broadcast to frontend via cache/event
       Cache::put("mqtt_qty_ok_{$monitoringId}", [
         'qty_ok' => $monitoring->qty_ok,
         'qty_actual' => $monitoring->qty_actual,
-        'timestamp' => now('Asia/Jakarta')->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty}");
-      Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}");
+      $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty} (Time: {$effectiveTime->toTimeString()})");
+      Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}, Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling QTY OK: ' . $e->getMessage());
       $this->error("ERROR: " . $e->getMessage());
@@ -493,57 +561,52 @@ class MqttProductionListener extends Command
       }
 
       // Get current time in Indonesia timezone (WIB - UTC+7)
+      // ================================
+      // VALIDASI WAKTU PAYLOAD
+      // ================================
       $nowIndonesia = now('Asia/Jakarta');
+      $payloadTime = $nowIndonesia;
 
-      // Close previous status log
-      $lastLog = ProductionStatusLog::where('monitoring_id', $monitoringId)
-        ->whereNull('end_time')
-        ->latest('start_time')
-        ->first();
+      if (!empty($data['time'])) {
+        $payloadTime = \Carbon\Carbon::parse(
+        $nowIndonesia->format('Y-m-d') . ' ' . $data['time'],
+        'Asia/Jakarta'
+    );
 
-      if ($lastLog) {
-        // Calculate duration in seconds - ensure positive integer
-        $durationSeconds = (int)max(0, floor(abs($nowIndonesia->diffInSeconds($lastLog->start_time))));
-
-        $lastLog->update([
-          'end_time' => $nowIndonesia,
-          'duration_seconds' => $durationSeconds
+    // ⛔ BELUM WAKTUNYA → JANGAN PROSES STATUS
+    if ($nowIndonesia->lt($payloadTime)) {
+        Log::info('Status ditunda karena waktu belum tercapai', [
+            'monitoring_id' => $monitoringId,
+            'status' => $normalizedStatus,
+            'now' => $nowIndonesia->toDateTimeString(),
+            'payload_time' => $payloadTime->toDateTimeString()
         ]);
+        return;
+    }
+}
 
-        \Log::info("Status log closed (legacy handler)", [
-          'monitoring_id' => $monitoringId,
-          'previous_status' => $lastLog->status,
-          'duration_seconds' => $durationSeconds
-        ]);
-      }
-
-      // Create new status log (Indonesia Timezone - WIB UTC+7)
-      ProductionStatusLog::create([
-        'monitoring_id' => $monitoringId,
-        'status' => $normalizedStatus,
-        'start_time' => $nowIndonesia,
-        'created_at' => $nowIndonesia
-      ]);
-
-      // Update monitoring status
-      $monitoring->update([
-        'status'     => $normalizedStatus,
-        'updated_at' => $nowIndonesia,
-      ]);
-
-      // Signal frontend to show form if needed
-      if ($normalizedStatus === 'Downtime') {
-        Cache::put("mqtt_show_downtime_form_{$monitoringId}", true, 300);
-      }
 
       // Signal frontend to update status
       Cache::put("mqtt_status_signal_{$monitoringId}", [
         'status' => $normalizedStatus,
-        'timestamp' => now()->toIso8601String()
+        'timestamp' => $payloadTime->toIso8601String()
       ], 60);
 
-      $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus}");
-      Log::info("MQTT Status: Monitoring {$monitoringId}, Status: {$normalizedStatus}");
+      // LEGACY: Directly update DB using payloadTime
+      ProductionStatusLog::create([
+        'monitoring_id' => $monitoringId,
+        'status' => $normalizedStatus,
+        'start_time' => $payloadTime,
+        'created_at' => $payloadTime
+      ]);
+
+      $monitoring->update([
+        'status'     => $normalizedStatus,
+        'updated_at' => $payloadTime,
+      ]);
+
+      $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus} (Time: {$payloadTime->toTimeString()})");
+      Log::info("MQTT Status: Monitoring {$monitoringId}, Status: {$normalizedStatus}, Legacy Time: {$payloadTime}");
     } catch (\Exception $e) {
       Log::error('Error handling Status: ' . $e->getMessage());
       $this->error("ERROR: " . $e->getMessage());
@@ -581,15 +644,19 @@ class MqttProductionListener extends Command
         return;
       }
 
+      $effectiveTime = isset($data['time']) 
+          ? \Carbon\Carbon::parse(now('Asia/Jakarta')->format('Y-m-d') . ' ' . $data['time'], 'Asia/Jakarta')
+          : now('Asia/Jakarta');
+
       // Signal frontend to show NG form with qty from MQTT
       Cache::put("mqtt_ng_signal_{$monitoringId}", [
         'show' => true,
         'qty' => $qty,
-        'timestamp' => now()->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String()
       ], 300);
 
-      $this->info("✓ NG signal received for monitoring {$monitoringId}: qty {$qty}");
-      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}");
+      $this->info("✓ NG signal received for monitoring {$monitoringId}: qty {$qty} (Time: {$effectiveTime->toTimeString()})");
+      Log::info("MQTT NG: Monitoring {$monitoringId}, Qty: {$qty}, Time: {$effectiveTime}");
     } catch (\Exception $e) {
       Log::error('Error handling NG: ' . $e->getMessage());
       $this->error("ERROR: " . $e->getMessage());
@@ -599,11 +666,12 @@ class MqttProductionListener extends Command
   /**
    * Record OK timestamp for cycle time calculation
    */
-  private function recordOkTimestamp($monitoringId)
+  private function recordOkTimestamp($monitoringId, $timestamp = null)
   {
+    $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
     $cacheKey = "ok_timestamps_{$monitoringId}";
     $timestamps = Cache::get($cacheKey, []);
-    $timestamps[] = now('Asia/Jakarta')->toIso8601String();
+    $timestamps[] = $effectiveTime->toIso8601String();
 
     // Keep only last 100 timestamps to avoid memory issues
     if (count($timestamps) > 100) {
