@@ -116,13 +116,12 @@ class MqttProductionHandler {
     const statusElement = document.getElementById('current-status');
     const status = data.current_status || 'Unknown';
     
-    // Check if status changed and trigger timer reset
-    if (this.lastStatus && this.lastStatus !== status) {
-      console.log('Status changed via MQTT from', this.lastStatus, 'to', status);
+    // Check if status changed or has final duration and trigger timer update
+    if (this.lastStatus !== status || data.final_duration !== null) {
+      console.log('Status update via MQTT:', status);
       
-      // IMMEDIATELY reset timer for new status
       if (typeof window.updateTimerStatus === 'function') {
-        window.updateTimerStatus(status);
+        window.updateTimerStatus(status, data.current_status_start_time, data.final_duration);
       }
     }
     
@@ -369,11 +368,11 @@ class MqttProductionHandler {
       
       // IMMEDIATELY reset timer for new status
       if (typeof window.updateTimerStatus === 'function') {
-        window.updateTimerStatus(status);
+        window.updateTimerStatus(status, data.current_status_start_time, data.final_duration);
       }
       
-      // Also force reset timer if function exists
-      if (typeof window.forceResetTimer === 'function') {
+      // Also force reset timer if function exists and not finished
+      if (status.toLowerCase() !== 'finish' && typeof window.forceResetTimer === 'function') {
         window.forceResetTimer();
       }
       

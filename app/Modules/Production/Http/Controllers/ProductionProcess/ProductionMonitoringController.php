@@ -12,6 +12,7 @@ use App\Modules\Production\Services\OeeCalculationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class ProductionMonitoringController extends Controller
 {
@@ -131,6 +132,11 @@ class ProductionMonitoringController extends Controller
     // Get current time in Indonesia timezone (WIB - UTC+7)
     $nowIndonesia = now('Asia/Jakarta');
 
+    // Deactivate existing active monitorings for this machine
+    \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::where('machine_id', $request->machine_id)
+      ->where('is_active', 1)
+      ->update(['is_active' => 0]);
+
     // Create production monitoring record
     $monitoring = \App\Modules\Production\Models\ProductionProcess\ProductionMonitoring::create([
       'wo_no' => $request->wo_no,
@@ -148,7 +154,7 @@ class ProductionMonitoringController extends Controller
       'qty_ng' => 0,
       'qty_actual' => 0,
       'is_active' => 1,
-      'created_by' => auth()->check() ? auth()->user()->name : 'system',
+      'created_by' => Auth::check() ? Auth::user()->name : 'system',
       'created_at' => $nowIndonesia
     ]);
 
@@ -206,6 +212,12 @@ class ProductionMonitoringController extends Controller
       }
     ])->findOrFail($id);
 
+    // AUTO-FINISH CHECK: If target reached but status not Finish, finish it now
+    if ($monitoring->qty_ok >= $monitoring->wo_qty && $monitoring->wo_qty > 0 && $monitoring->current_status !== 'Finish') {
+        \App\Modules\Production\Services\ProductionFinishService::finishMonitoring($id);
+        $monitoring->refresh();
+    }
+
     // Get realtime OEE metrics from service
     $metrics = OeeCalculationService::getRealtimeMetrics($id);
 
@@ -246,6 +258,18 @@ class ProductionMonitoringController extends Controller
         ->first();
     $statusStartTime = $currentStatusLog ? $currentStatusLog->start_time->toIso8601String() : null;
 
+    $finalDuration = null;
+    if ($monitoring->current_status === 'Finish') {
+        $lastActiveLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+            ->where('status', '!=', 'Finish')
+            ->whereNotNull('end_time')
+            ->orderBy('end_time', 'desc')
+            ->first();
+        if ($lastActiveLog) {
+            $finalDuration = $lastActiveLog->duration_seconds;
+        }
+    }
+
     return response()->json([
       'wo_qty' => $monitoring->wo_qty,
       'qty_actual' => $monitoring->qty_actual,
@@ -253,6 +277,7 @@ class ProductionMonitoringController extends Controller
       'qty_ok' => $monitoring->qty_ok,
       'current_status' => $monitoring->current_status,
       'current_status_start_time' => $statusStartTime,
+      'final_duration' => $finalDuration,
       'oee' => $metrics['oee'],
       'availability' => $metrics['availability'],
       'performance' => $metrics['performance'],
@@ -317,6 +342,12 @@ class ProductionMonitoringController extends Controller
     // Record OK timestamp for cycle time calculation
     OeeCalculationService::recordOkTimestamp($id);
 
+    // Check if Finished 
+    if ($monitoring->qty_ok >= $monitoring->wo_qty && $monitoring->current_status !== 'Finish') {
+        \App\Modules\Production\Services\ProductionFinishService::finishMonitoring($id);
+        $monitoring->refresh();
+    }
+
     // Get updated metrics
     $metrics = OeeCalculationService::getRealtimeMetrics($id);
 
@@ -324,6 +355,7 @@ class ProductionMonitoringController extends Controller
       'success' => true,
       'qty_ok' => $monitoring->qty_ok,
       'qty_actual' => $monitoring->qty_actual,
+      'current_status' => $monitoring->current_status,
       'metrics' => $metrics
     ]);
   }
@@ -530,10 +562,23 @@ class ProductionMonitoringController extends Controller
         ->latest('start_time')
         ->first();
 
+    $finalDuration = null;
+    if ($monitoring->current_status === 'Finish') {
+        $lastActiveLog = \App\Modules\Production\Models\ProductionProcess\ProductionStatusLog::where('monitoring_id', $id)
+            ->where('status', '!=', 'Finish')
+            ->whereNotNull('end_time')
+            ->orderBy('end_time', 'desc')
+            ->first();
+        if ($lastActiveLog) {
+            $finalDuration = $lastActiveLog->duration_seconds;
+        }
+    }
+
     return response()->json([
       'success' => true,
       'current_status' => $monitoring->current_status,
-      'current_status_start_time' => $currentStatusLog ? $currentStatusLog->start_time->toIso8601String() : null
+      'current_status_start_time' => $currentStatusLog ? $currentStatusLog->start_time->toIso8601String() : null,
+      'final_duration' => $finalDuration
     ]);
   }
 

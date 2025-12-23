@@ -5,6 +5,7 @@ namespace App\Modules\Production\Services;
 use App\Modules\Production\Models\ProductionProcess\ProductionMonitoring;
 use App\Modules\Production\Models\ProductionProcess\ProductionStatusLog;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class OeeCalculationService
 {
@@ -64,6 +65,8 @@ class OeeCalculationService
     $now = now('Asia/Jakarta');
 
     foreach ($monitoring->statusLogs as $log) {
+      if ($log->status === 'Finish') continue;
+      
       if ($log->duration_seconds && $log->duration_seconds > 0) {
         $plannedTime += $log->duration_seconds;
       } else if ($log->end_time) {
@@ -206,11 +209,13 @@ class OeeCalculationService
   /**
    * Record OK timestamp for cycle time calculation
    */
-  public static function recordOkTimestamp($monitoringId)
+  public static function recordOkTimestamp($monitoringId, $timestamp = null)
   {
     $cacheKey = "ok_timestamps_{$monitoringId}";
+    $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
+    
     $timestamps = Cache::get($cacheKey, []);
-    $timestamps[] = now('Asia/Jakarta')->toIso8601String();
+    $timestamps[] = $effectiveTime->toIso8601String();
 
     // Keep only last 100 timestamps to avoid memory issues
     if (count($timestamps) > 100) {
@@ -244,12 +249,12 @@ class OeeCalculationService
         'low_cycle_time' => round($metrics['low_cycle_time'], 1),
       ];
 
-      \Log::info("OEE Service Result for monitoring {$monitoringId}", $result);
+      Log::info("OEE Service Result for monitoring {$monitoringId}", $result);
 
       return $result;
     } catch (\Exception $e) {
-      \Log::error("Error calculating OEE metrics for monitoring {$monitoringId}: " . $e->getMessage());
-      \Log::error($e->getTraceAsString());
+      Log::error("Error calculating OEE metrics for monitoring {$monitoringId}: " . $e->getMessage());
+      Log::error($e->getTraceAsString());
 
       // Return default values on error
       return [

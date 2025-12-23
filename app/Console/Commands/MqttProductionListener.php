@@ -8,6 +8,7 @@ use App\Modules\Production\Models\ProductionProcess\ProductionMonitoring;
 use App\Modules\Production\Models\ProductionProcess\ProductionStatusLog;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class MqttProductionListener extends Command
 {
@@ -54,9 +55,18 @@ class MqttProductionListener extends Command
 
     // Keep the listener running
     try {
+      $lastHeartbeat = now();
       while (true) {
-        $this->mqttService->loop(true);
+        // Use non-blocking loop so we can process pending actions regardless of new messages
+        $this->mqttService->loop(false);
         $this->processPendingActions();
+        
+        // Heartbeat log every 30s to confirm loop is alive
+        if (now()->diffInSeconds($lastHeartbeat) >= 30) {
+            $this->line('<fg=gray>  [Log] Listener pulse: ' . now('Asia/Jakarta')->toTimeString() . ' - Checking pending signals...</>');
+            $lastHeartbeat = now();
+        }
+        
         usleep(100000); // 100ms delay
       }
     } catch (\Exception $e) {
@@ -66,27 +76,66 @@ class MqttProductionListener extends Command
     }
   }
 
-  protected $pendingActions = [];
 
   protected function processPendingActions()
   {
-      if (empty($this->pendingActions)) {
+      $now = now('Asia/Jakarta');
+      $nowStr = $now->toDateTimeString();
+      
+      // Get signals that are ready to be executed
+      $pendingSignals = DB::table('t_production_pending_signals')
+        ->where('is_processed', 0) // Use integer 0 explicitly
+        ->where('execute_at', '<=', $nowStr)
+        ->orderBy('execute_at', 'asc')
+        ->orderBy('id', 'asc')
+        ->get();
+
+      if ($pendingSignals->isEmpty()) {
+          // Monitor queue every 10s even if empty to show it's alive
+          static $lastEmptyLog = 0;
+          if (time() - $lastEmptyLog >= 10) {
+              $total = DB::table('t_production_pending_signals')->where('is_processed', 0)->count();
+              if ($total > 0) {
+                  $next = DB::table('t_production_pending_signals')->where('is_processed', 0)->orderBy('execute_at', 'asc')->first();
+                  $this->line("<fg=yellow>  [Queue] {$total} signals waiting. Next: {$next->execute_at} | Now: {$nowStr}</>");
+              }
+              $lastEmptyLog = time();
+          }
           return;
       }
 
-      $now = now('Asia/Jakarta');
+      $this->info("Found " . $pendingSignals->count() . " pending signals to process at " . $now->toTimeString());
 
-      foreach ($this->pendingActions as $key => $action) {
-          if ($now->gte($action['execute_at'])) {
-              $this->info("⏰ Executing delayed action for {$action['mesin']} at {$now->toTimeString()} (Scheduled: {$action['execute_at']->toTimeString()})");
-              
-              if ($action['type'] === 'unified') {
-                  $this->processUnifiedData($action['data']);
-              }
+      foreach ($pendingSignals as $signal) {
+        try {
+          $scheduledTime = \Carbon\Carbon::parse($signal->execute_at, 'Asia/Jakarta');
+          $this->info("▶ Processing {$signal->trx_type} for {$signal->machine_code} (Scheduled: " . $scheduledTime->toTimeString() . ")");
+          
+          $payload = json_decode($signal->payload, true);
+          
+          // Ensure we use the original payload time as the effective timestamp
+          $this->processUnifiedData($payload);
 
-              unset($this->pendingActions[$key]);
-          }
+          // Mark as processed
+          DB::table('t_production_pending_signals')
+            ->where('id', $signal->id)
+            ->update([
+              'is_processed' => true,
+              'updated_at' => now('Asia/Jakarta')
+            ]);
+            
+          $this->info("✓ Successfully processed and marked as done.");
+        } catch (\Exception $e) {
+          $this->error("✖ Error processing pending signal {$signal->id}: " . $e->getMessage());
+          Log::error("Pending Signal Error: " . $e->getMessage(), ['signal_id' => $signal->id]);
+        }
       }
+
+      // Cleanup old processed signals (keep last 1 hour)
+      DB::table('t_production_pending_signals')
+          ->where('is_processed', true)
+          ->where('updated_at', '<', now('Asia/Jakarta')->subHour())
+          ->delete();
   }
 
   protected function subscribeToTopics()
@@ -139,14 +188,18 @@ class MqttProductionListener extends Command
           
           if ($nowIndonesia->lt($payloadTime)) {
              $mesin = $data['mesin'] ?? $data['machine_code'] ?? 'Unknown';
-             $this->info("⏳ Delaying signal for {$mesin} until {$payloadTime->toTimeString()} (Current: {$nowIndonesia->toTimeString()})");
-             
-             $this->pendingActions[] = [
-                 'execute_at' => $payloadTime,
-                 'type' => 'unified',
-                 'data' => $data,
-                 'mesin' => $mesin
-             ];
+             $trxType = $data['trx_type'] ?? 'unknown';
+             $this->info("⏳ Saving delayed signal for {$mesin} until " . $payloadTime->format('H:i:s') . " (Current: " . $nowIndonesia->format('H:i:s') . ")");
+
+             DB::table('t_production_pending_signals')->insert([
+               'machine_code' => $mesin,
+               'trx_type' => $trxType,
+               'payload' => $message,
+               'execute_at' => $payloadTime->toDateTimeString(),
+               'is_processed' => false,
+               'created_at' => now(),
+               'updated_at' => now()
+             ]);
              return;
           }
       }
@@ -161,16 +214,20 @@ class MqttProductionListener extends Command
 
   protected function processUnifiedData($data)
   {
-      $trxType = $data['trx_type'] ?? null;
+      $rawTrxType = $data['trx_type'] ?? null;
       $mesin = $data['mesin'] ?? $data['machine_code'] ?? null;
       
+      // Normalize trx_type to lowercase and fix common typos
+      $trxType = strtolower($rawTrxType ?? '');
+      if ($trxType === 'statys') $trxType = 'status';
+
       // Parse timestamp
       $nowIndonesia = now('Asia/Jakarta');
       $effectiveTime = isset($data['time']) 
           ? \Carbon\Carbon::parse($nowIndonesia->format('Y-m-d') . ' ' . $data['time'], 'Asia/Jakarta')
           : $nowIndonesia;
 
-      $this->info("DEBUG: Processing - trx_type: {$trxType}, mesin: {$mesin}, time: {$effectiveTime->toTimeString()}");
+      $this->info("DEBUG: Processing - trx_type: {$trxType} (original: {$rawTrxType}), mesin: {$mesin}, time: {$effectiveTime->toTimeString()}");
 
       if (!$trxType) {
         Log::warning('Unified Signal: trx_type not provided');
@@ -193,6 +250,7 @@ class MqttProductionListener extends Command
             $this->handleStatusUpdate($monitoringId, $status, $effectiveTime);
           }
           break;
+
 
         case 'qty_ok':
           $qty = $data['qty'] ?? 1;
@@ -311,9 +369,23 @@ class MqttProductionListener extends Command
         Cache::put("mqtt_show_downtime_form_{$monitoringId}", true, 300);
       }
 
+      $finalDuration = null;
+      if ($normalizedStatus === 'Finish') {
+          // Re-fetch the last log which should be the one we just closed
+          $lastActiveLog = ProductionStatusLog::where('monitoring_id', $monitoringId)
+              ->where('status', '!=', 'Finish')
+              ->whereNotNull('end_time')
+              ->orderBy('end_time', 'desc')
+              ->first();
+          if ($lastActiveLog) {
+              $finalDuration = $lastActiveLog->duration_seconds;
+          }
+      }
+
       Cache::put("mqtt_status_signal_{$monitoringId}", [
         'status' => $normalizedStatus,
-        'timestamp' => $effectiveTime->toIso8601String()
+        'timestamp' => $effectiveTime->toIso8601String(),
+        'final_duration' => $finalDuration
       ], 60);
 
       $this->info("✓ Status updated for monitoring {$monitoringId}: {$normalizedStatus} (Time: {$effectiveTime->toDateTimeString()})");
@@ -346,16 +418,25 @@ class MqttProductionListener extends Command
 
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
+      $monitoring->refresh(); // Refresh to get updated values for finish check
 
       // Record OK timestamp for cycle time calculation
       $this->recordOkTimestamp($monitoringId, $effectiveTime);
 
-      // Broadcast to frontend
-      Cache::put("mqtt_qty_ok_{$monitoringId}", [
-        'qty_ok' => $monitoring->qty_ok,
-        'qty_actual' => $monitoring->qty_actual,
-        'timestamp' => $effectiveTime->toIso8601String()
-      ], 60);
+      // Check if Finished
+      if ($monitoring->qty_ok >= $monitoring->wo_qty && $monitoring->current_status !== 'Finish') {
+          $this->info("✔ Production finished for monitoring {$monitoringId} (qty_ok: {$monitoring->qty_ok} / {$monitoring->wo_qty})");
+          
+          // Use the internal handleStatusUpdate to handle all the logging and cache signals
+          \App\Modules\Production\Services\ProductionFinishService::finishMonitoring($monitoringId);
+      } else {
+          // Broadcast to frontend (if not finished, handleStatusUpdate already signals if it did finish)
+          Cache::put("mqtt_qty_ok_{$monitoringId}", [
+            'qty_ok' => $monitoring->qty_ok,
+            'qty_actual' => $monitoring->qty_actual,
+            'timestamp' => $effectiveTime->toIso8601String()
+          ], 60);
+      }
 
       $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty} (Time: {$effectiveTime->toTimeString()})");
       Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}, Time: {$effectiveTime}");
@@ -500,6 +581,7 @@ class MqttProductionListener extends Command
 
       $monitoring->increment('qty_ok', $qty);
       $monitoring->increment('qty_actual', $qty);
+      $monitoring->refresh(); // Refresh to get updated values for finish check
 
       $effectiveTime = isset($data['time']) 
           ? \Carbon\Carbon::parse(now('Asia/Jakarta')->format('Y-m-d') . ' ' . $data['time'], 'Asia/Jakarta')
@@ -508,12 +590,18 @@ class MqttProductionListener extends Command
       // Record OK timestamp for cycle time calculation
       $this->recordOkTimestamp($monitoringId, $effectiveTime);
 
-      // Broadcast to frontend via cache/event
-      Cache::put("mqtt_qty_ok_{$monitoringId}", [
-        'qty_ok' => $monitoring->qty_ok,
-        'qty_actual' => $monitoring->qty_actual,
-        'timestamp' => $effectiveTime->toIso8601String()
-      ], 60);
+      // Check if Finished
+      if ($monitoring->qty_ok >= $monitoring->wo_qty && $monitoring->current_status !== 'Finish') {
+          $this->info("✔ Production finished (Legacy) for monitoring {$monitoringId} (qty_ok: {$monitoring->qty_ok} / {$monitoring->wo_qty})");
+          \App\Modules\Production\Services\ProductionFinishService::finishMonitoring($monitoringId);
+      } else {
+          // Broadcast to frontend via cache/event
+          Cache::put("mqtt_qty_ok_{$monitoringId}", [
+            'qty_ok' => $monitoring->qty_ok,
+            'qty_actual' => $monitoring->qty_actual,
+            'timestamp' => $effectiveTime->toIso8601String()
+          ], 60);
+      }
 
       $this->info("✓ QTY OK updated for monitoring {$monitoringId}: +{$qty} (Time: {$effectiveTime->toTimeString()})");
       Log::info("MQTT QTY OK: Monitoring {$monitoringId}, Qty: {$qty}, Time: {$effectiveTime}");
@@ -601,7 +689,7 @@ class MqttProductionListener extends Command
       ]);
 
       $monitoring->update([
-        'status'     => $normalizedStatus,
+        'current_status' => $normalizedStatus,
         'updated_at' => $payloadTime,
       ]);
 
@@ -668,16 +756,6 @@ class MqttProductionListener extends Command
    */
   private function recordOkTimestamp($monitoringId, $timestamp = null)
   {
-    $effectiveTime = $timestamp instanceof \Carbon\Carbon ? $timestamp : now('Asia/Jakarta');
-    $cacheKey = "ok_timestamps_{$monitoringId}";
-    $timestamps = Cache::get($cacheKey, []);
-    $timestamps[] = $effectiveTime->toIso8601String();
-
-    // Keep only last 100 timestamps to avoid memory issues
-    if (count($timestamps) > 100) {
-      $timestamps = array_slice($timestamps, -100);
-    }
-
-    Cache::put($cacheKey, $timestamps, 86400); // 24 hours
+    \App\Modules\Production\Services\OeeCalculationService::recordOkTimestamp($monitoringId, $timestamp);
   }
 }
